@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#0D1B3E">
+<title>Terminal • {{ store.name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&family=Russo+One&family=Orbitron:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Nunito',sans-serif;background:#0D1B3E;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+
+.terminal{width:100%;max-width:420px;margin:0 auto;}
+
+/* HEADER */
+.header{text-align:center;padding:24px 0 20px;}
+.logo-s{font-family:'Russo One',sans-serif;font-size:52px;color:#DC1E28;line-height:1;}
+.logo-name{font-family:'Russo One',sans-serif;font-size:28px;color:#1A52C8;letter-spacing:2px;}
+.logo-tag{font-size:13px;color:rgba(255,255,255,.3);font-style:italic;margin-top:4px;}
+
+/* CARD */
+.card{background:white;border-radius:24px;padding:28px 24px;margin-bottom:16px;}
+.card-title{font-size:22px;font-weight:900;color:#0D1B3E;margin-bottom:6px;text-align:center;}
+.card-sub{font-size:14px;color:#9CA3AF;text-align:center;margin-bottom:24px;}
+
+/* INPUTS */
+.field{margin-bottom:18px;}
+.field label{display:block;font-size:13px;font-weight:800;color:#6B7280;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;}
+.field input{
+  width:100%;padding:16px 18px;
+  border:3px solid #E5E7EB;border-radius:16px;
+  font-family:'Orbitron',monospace;
+  font-size:26px;font-weight:700;
+  color:#0D1B3E;background:#FAFAFA;
+  outline:none;text-align:center;
+  transition:border .2s;
+  -webkit-appearance:none;
+}
+.field input:focus{border-color:#1A52C8;background:white;}
+.field input.error{border-color:#DC1E28;background:#FEF2F2;}
+.field input::placeholder{color:#D1D5DB;font-size:20px;}
+
+/* KEYPAD */
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+.key{
+  height:64px;border:none;border-radius:14px;
+  background:#F3F4F6;font-family:'Nunito',sans-serif;
+  font-size:24px;font-weight:900;color:#0D1B3E;
+  cursor:pointer;transition:all .1s;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.key:active{background:#E5E7EB;transform:scale(.96);}
+.key.zero{grid-column:span 2;}
+.key.del{background:#FEF2F2;color:#DC1E28;}
+.key.del:active{background:#FCA5A5;}
+
+/* CONFIRM BUTTON */
+.btn-confirm{
+  width:100%;padding:20px;border:none;border-radius:16px;
+  background:linear-gradient(90deg,#1A52C8,#DC1E28);
+  color:white;font-family:'Nunito',sans-serif;
+  font-size:20px;font-weight:900;cursor:pointer;
+  transition:opacity .15s;margin-bottom:10px;
+}
+.btn-confirm:active{opacity:.85;}
+.btn-confirm:disabled{opacity:.5;cursor:not-allowed;}
+
+.btn-clear{
+  width:100%;padding:14px;border:2px solid #E5E7EB;
+  border-radius:14px;background:transparent;
+  font-family:'Nunito',sans-serif;font-size:15px;
+  font-weight:800;color:#9CA3AF;cursor:pointer;
+}
+
+/* ERROR */
+.err-msg{
+  background:#FEF2F2;border:1px solid #FCA5A5;
+  border-radius:12px;padding:12px 16px;
+  font-size:14px;font-weight:700;color:#DC1E28;
+  text-align:center;margin-bottom:12px;display:none;
+}
+.err-msg.show{display:block;}
+
+/* SUCCESS SCREEN */
+.success{display:none;text-align:center;padding:20px 0;}
+.success.show{display:block;}
+.success-icon{font-size:72px;margin-bottom:16px;}
+.success-title{font-size:28px;font-weight:900;color:#0D1B3E;margin-bottom:8px;}
+.success-pts{font-family:'Orbitron',monospace;font-size:48px;font-weight:800;color:#1A52C8;line-height:1;}
+.success-pts-lbl{font-size:14px;color:#9CA3AF;font-weight:700;margin-bottom:16px;}
+.success-tier{display:inline-block;padding:6px 20px;border-radius:20px;font-size:14px;font-weight:900;margin-bottom:16px;}
+.success-disc{font-size:18px;font-weight:900;color:#DC1E28;margin-bottom:8px;}
+.success-msg{font-size:13px;color:#6B7280;margin-bottom:24px;}
+.success-new{background:#EEF2FF;border-radius:12px;padding:12px;margin-bottom:20px;}
+.success-new-title{font-size:13px;font-weight:800;color:#1A52C8;margin-bottom:4px;}
+.success-new-card{font-family:monospace;font-size:13px;color:#6B7280;}
+.btn-novo{
+  width:100%;padding:16px;border:none;border-radius:14px;
+  background:#0D1B3E;color:white;font-family:'Nunito',sans-serif;
+  font-size:16px;font-weight:900;cursor:pointer;
+}
+
+/* LOADING */
+.loading{display:none;text-align:center;padding:40px 0;}
+.loading.show{display:block;}
+.spinner{width:48px;height:48px;border:5px solid rgba(26,82,200,.2);border-top-color:#1A52C8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-txt{font-size:16px;font-weight:700;color:#6B7280;}
+
+/* STEPS */
+.steps{display:flex;justify-content:center;gap:6px;margin-bottom:24px;}
+.step{width:12px;height:12px;border-radius:50%;background:#E5E7EB;transition:background .3s;}
+.step.active{background:#1A52C8;}
+
+/* FOOTER */
+.footer{text-align:center;padding:12px 0;}
+.footer-txt{font-size:12px;color:rgba(255,255,255,.2);}
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="header">
+    <div class="logo-s">S</div>
+    <div class="logo-name">ÃO LUIS</div>
+    <div class="logo-tag">{{ store.slogan }}</div>
+  </div>
+
+  <!-- FORM SCREEN -->
+  <div id="form-screen">
+    <div class="card">
+      <div class="card-title">Registrar meus pontos</div>
+      <div class="card-sub">Digite seu WhatsApp e o valor da compra</div>
+
+      <div class="steps">
+        <div class="step active" id="step1"></div>
+        <div class="step" id="step2"></div>
+      </div>
+
+      <!-- STEP 1: PHONE -->
+      <div id="screen-phone">
+        <div class="field">
+          <label>Seu WhatsApp (com DDD)</label>
+          <input type="tel" id="phone-input" placeholder="61 9XXXX-XXXX" inputmode="numeric" maxlength="15"/>
+        </div>
+        <div class="keypad" id="keypad-phone">
+          <button class="key" onclick="kp('1')">1</button>
+          <button class="key" onclick="kp('2')">2</button>
+          <button class="key" onclick="kp('3')">3</button>
+          <button class="key" onclick="kp('4')">4</button>
+          <button class="key" onclick="kp('5')">5</button>
+          <button class="key" onclick="kp('6')">6</button>
+          <button class="key" onclick="kp('7')">7</button>
+          <button class="key" onclick="kp('8')">8</button>
+          <button class="key" onclick="kp('9')">9</button>
+          <button class="key zero" onclick="kp('0')">0</button>
+          <button class="key del" onclick="kpDel()">⌫</button>
+        </div>
+        <div class="err-msg" id="phone-err"></div>
+        <button class="btn-confirm" onclick="goToValue()">Continuar →</button>
+      </div>
+
+      <!-- STEP 2: VALUE -->
+      <div id="screen-value" style="display:none;">
+        <div class="field">
+          <label>Valor da compra (R$)</label>
+          <input type="text" id="value-input" placeholder="0,00" inputmode="numeric" readonly/>
+        </div>
+        <div class="keypad" id="keypad-value">
+          <button class="key" onclick="kv('1')">1</button>
+          <button class="key" onclick="kv('2')">2</button>
+          <button class="key" onclick="kv('3')">3</button>
+          <button class="key" onclick="kv('4')">4</button>
+          <button class="key" onclick="kv('5')">5</button>
+          <button class="key" onclick="kv('6')">6</button>
+          <button class="key" onclick="kv('7')">7</button>
+          <button class="key" onclick="kv('8')">8</button>
+          <button class="key" onclick="kv('9')">9</button>
+          <button class="key zero" onclick="kv('0')">0</button>
+          <button class="key del" onclick="kvDel()">⌫</button>
+        </div>
+        <div class="err-msg" id="value-err"></div>
+        <button class="btn-confirm" id="confirm-btn" onclick="doConfirm()">✅ Confirmar e ganhar pontos!</button>
+        <button class="btn-clear" onclick="backToPhone()">← Voltar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading card" id="loading-screen">
+    <div class="spinner"></div>
+    <div class="loading-txt">Registrando seus pontos...</div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="card" id="success-screen" style="display:none;">
+    <div class="success show">
+      <div class="success-icon" id="s-icon">🎉</div>
+      <div class="success-title" id="s-title">Pontos registrados!</div>
+      <div class="success-pts" id="s-pts">0</div>
+      <div class="success-pts-lbl" id="s-pts-lbl">pontos adicionados</div>
+      <div class="success-tier" id="s-tier"></div>
+      <div class="success-disc" id="s-disc"></div>
+      <div class="success-msg" id="s-msg"></div>
+      <div class="success-new" id="s-new" style="display:none;">
+        <div class="success-new-title">Cadastro realizado!</div>
+        <div class="success-new-card" id="s-card"></div>
+      </div>
+      <button class="btn-novo" onclick="reset()">Próximo cliente</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-txt">{{ store.name }} • {{ store.phone }} • {{ store.address }}</div>
+  </div>
+</div>
+
+<script>
+var phoneRaw = '';
+var valueRaw = '';
+
+// ── PHONE KEYPAD ─────────────────────────────────────────────────────────────
+function kp(d){
+  if(phoneRaw.length >= 11) return;
+  phoneRaw += d;
+  updatePhoneDisplay();
+}
+function kpDel(){
+  phoneRaw = phoneRaw.slice(0,-1);
+  updatePhoneDisplay();
+}
+function updatePhoneDisplay(){
+  var el = document.getElementById('phone-input');
+  var p = phoneRaw;
+  var fmt = p;
+  if(p.length > 0) fmt = '(' + p.slice(0,2);
+  if(p.length > 2) fmt += ') ' + p.slice(2,7);
+  if(p.length > 7) fmt += '-' + p.slice(7,11);
+  el.value = fmt;
+  el.classList.remove('error');
+  document.getElementById('phone-err').classList.remove('show');
+}
+
+// ── VALUE KEYPAD ──────────────────────────────────────────────────────────────
+function kv(d){
+  if(valueRaw.length >= 6) return;
+  valueRaw += d;
+  updateValueDisplay();
+}
+function kvDel(){
+  valueRaw = valueRaw.slice(0,-1);
+  updateValueDisplay();
+}
+function updateValueDisplay(){
+  var el = document.getElementById('value-input');
+  if(!valueRaw){ el.value = ''; return; }
+  var num = parseInt(valueRaw) / 100;
+  el.value = 'R$ ' + num.toFixed(2).replace('.',',');
+  el.classList.remove('error');
+  document.getElementById('value-err').classList.remove('show');
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function goToValue(){
+  var err = document.getElementById('phone-err');
+  err.classList.remove('show');
+  if(phoneRaw.length < 10){
+    err.textContent = 'Digite o WhatsApp com DDD (ex: 61 9XXXX-XXXX)';
+    err.classList.add('show');
+    document.getElementById('phone-input').classList.add('error');
+    return;
+  }
+  document.getElementById('screen-phone').style.display = 'none';
+  document.getElementById('screen-value').style.display = 'block';
+  document.getElementById('step1').classList.remove('active');
+  document.getElementById('step2').classList.add('active');
+}
+
+function backToPhone(){
+  document.getElementById('screen-value').style.display = 'none';
+  document.getElementById('screen-phone').style.display = 'block';
+  document.getElementById('step2').classList.remove('active');
+  document.getElementById('step1').classList.add('active');
+  valueRaw = '';
+  document.getElementById('value-input').value = '';
+}
+
+// ── CONFIRM ───────────────────────────────────────────────────────────────────
+async function doConfirm(){
+  var err = document.getElementById('value-err');
+  err.classList.remove('show');
+
+  if(!valueRaw || parseInt(valueRaw) < 100){
+    err.textContent = 'Digite o valor da compra (minimo R$ 1,00)';
+    err.classList.add('show');
+    document.getElementById('value-input').classList.add('error');
+    return;
+  }
+
+  var valor = parseInt(valueRaw) / 100;
+  var phone = phoneRaw;
+
+  document.getElementById('form-screen').style.display = 'none';
+  document.getElementById('loading-screen').style.display = 'block';
+
+  try {
+    var res = await fetch('/api/terminal/pontuar', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({phone: phone, value: valor.toFixed(2)})
+    });
+    var data = await res.json();
+
+    document.getElementById('loading-screen').style.display = 'none';
+
+    if(data.ok){
+      showSuccess(data, valor);
+    } else {
+      document.getElementById('form-screen').style.display = 'block';
+      err.textContent = data.msg || 'Erro ao registrar. Tente novamente.';
+      err.classList.add('show');
+    }
+  } catch(e){
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('form-screen').style.display = 'block';
+    err.textContent = 'Sem conexao. Verifique a internet.';
+    err.classList.add('show');
+  }
+}
+
+function showSuccess(data, valor){
+  var screen = document.getElementById('success-screen');
+  screen.style.display = 'block';
+
+  var tierColors = {Ouro:'background:#FFFBEB;color:#B45309;', Prata:'background:#F3F4F6;color:#4B5563;', Bronze:'background:#FEF3C7;color:#92400E;'};
+  var tierIcons  = {Ouro:'⭐', Prata:'🥈', Bronze:'🥉'};
+
+  document.getElementById('s-icon').textContent = data.novo ? '🎉' : '✅';
+  document.getElementById('s-title').textContent = data.novo ? 'Bem-vindo! Cadastro realizado!' : 'Pontos registrados com sucesso!';
+  document.getElementById('s-pts').textContent = '+' + data.points_added;
+  document.getElementById('s-pts-lbl').textContent = 'pontos adicionados  |  Total: ' + data.total_points.toLocaleString('pt-BR');
+
+  var tierEl = document.getElementById('s-tier');
+  tierEl.textContent = (tierIcons[data.tier]||'') + ' Nivel ' + data.tier;
+  tierEl.style.cssText = tierColors[data.tier] || '';
+
+  document.getElementById('s-disc').textContent = 'Desconto atual: ' + data.discount + '%';
+  document.getElementById('s-msg').textContent = 'Voce recebeu uma confirmacao no WhatsApp!';
+
+  if(data.novo){
+    document.getElementById('s-new').style.display = 'block';
+    document.getElementById('s-card').textContent = 'Cartao: ' + data.card;
+  }
+
+  // Auto-reset after 8 seconds
+  setTimeout(reset, 8000);
+}
+
+function reset(){
+  phoneRaw = '';
+  valueRaw = '';
+  document.getElementById('phone-input').value = '';
+  document.getElementById('value-input').value = '';
+  document.getElementById('phone-input').classList.remove('error');
+  document.getElementById('value-input').classList.remove('error');
+  document.getElementById('phone-err').classList.remove('show');
+  document.getElementById('value-err').classList.remove('show');
+  document.getElementById('s-new').style.display = 'none';
+  document.getElementById('success-screen').style.display = 'none';
+  document.getElementById('form-screen').style.display = 'block';
+  document.getElementById('screen-value').style.display = 'none';
+  document.getElementById('screen-phone').style.display = 'block';
+  document.getElementById('step1').classList.add('active');
+  document.getElementById('step2').classList.remove('active');
+}
+
+// Prevent screen sleep on tablet/phone
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden) reset();
+});
+</script>
+</body>
+</html>

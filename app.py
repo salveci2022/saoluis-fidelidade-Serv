@@ -420,7 +420,11 @@ def seed():
 def index():
     if "user_id" in session:
         return redirect(url_for("owner_dashboard" if session.get("role")=="owner" else "customer_card"))
-    return redirect(url_for("login_page"))
+    return render_template("splash.html")
+
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("icons/favicon.ico")
 
 @app.route("/login")
 def login_page():
