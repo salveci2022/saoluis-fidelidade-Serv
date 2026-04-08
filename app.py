@@ -50,7 +50,10 @@ def get_sqlite():
     return conn
 
 def get_pg():
-    import psycopg2
+    try:
+        import psycopg2
+    except ImportError:
+        raise RuntimeError("psycopg2 nao instalado. Configure DATABASE_URL ou use SQLite.")
     url = DATABASE_URL
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
