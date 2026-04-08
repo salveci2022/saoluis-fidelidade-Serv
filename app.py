@@ -864,3 +864,115 @@ if __name__ == "__main__":
     seed()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+# ── TERMINAL DE AUTOATENDIMENTO ───────────────────────────────────────────────
+@app.route('/terminal')
+def terminal_page():
+    store = db_get_store()
+    return render_template('terminal.html', store=store)
+
+@app.route('/api/terminal/pontuar', methods=['POST'])
+@limiter.limit('10 per minute')
+def api_terminal_pontuar():
+    data = request.json or {}
+    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+    valor_str = str(data.get('value','')).strip().replace(',','.')
+    ip = request.remote_addr
+
+    if not phone or len(phone) < 8:
+        return jsonify({'ok':False,'msg':'Telefone invalido. Digite com DDD.'}), 400
+
+    try:
+        valor = float(valor_str)
+    except:
+        return jsonify({'ok':False,'msg':'Valor invalido. Ex: 85.50'}), 400
+
+    if valor <= 0 or valor > 9999:
+        return jsonify({'ok':False,'msg':'Valor fora do limite permitido.'}), 400
+
+    store = db_get_store()
+    limite_dia = float(store.get('limite_dia_terminal','500'))
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    all_txs = load_json(TRANSACTIONS_FILE, []) if not USE_PG else db_get_all_transactions_today(today)
+    total_hoje = sum(float(t.get('value',0)) for t in all_txs
+                     if t.get('source')=='terminal' and
+                     _get_user_phone_from_tx(t) == phone and
+                     str(t.get('date','')).startswith(today))
+
+    if total_hoje + valor > limite_dia:
+        restante = max(0, limite_dia - total_hoje)
+        return jsonify({'ok':False,'msg':'Limite diario atingido. Restam R$ {:.2f} para hoje.'.format(restante)}), 400
+
+    u = db_get_user_by_email(phone)
+    novo = False
+    if not u:
+        uid = 'c_' + str(uuid.uuid4())[:8]
+        card = 'SL-{}-{}-DF'.format(str(uuid.uuid4())[:4].upper(), str(uuid.uuid4())[:4].upper())
+        u = {'id':uid,'name':'Cliente '+phone[-4:],'email':uid+'@saoluis.local',
+             'password':hash_pw(phone[-4:]),'role':'customer','phone':phone,
+             'points':0,'member_since':datetime.now().strftime('%Y-%m-%d'),
+             'card_number':card,'failed_attempts':0}
+        db_save_user(u)
+        novo = True
+
+    store_ppr = int(store.get('points_per_real','1'))
+    pts = max(1, int(valor * store_ppr))
+    u['points'] = u.get('points',0) + pts
+    db_save_user(u)
+
+    tx = {'id':str(uuid.uuid4()),'user_id':u['id'],'type':'purchase',
+          'points':pts,'value':valor,'source':'terminal',
+          'description':'Compra R${:.2f} - Terminal'.format(valor),
+          'date':datetime.now().strftime('%Y-%m-%d %H:%M'),'created_by':'terminal'}
+    db_save_transaction(tx)
+
+    new_pts = u['points']
+    tier = get_tier(new_pts)
+    disc = get_discount(new_pts)
+    loja = store.get('name','Sao Luis')
+
+    if novo:
+        msg = ('🏪 Bem-vindo ao {}!\n'
+               '✅ Cadastro realizado!\n'
+               '💳 Cartao: {}\n'
+               '➕ +{} pontos!\n'
+               '💰 Desconto: {}%\n'
+               'A sua escolha Feliz! 🎉').format(loja, u['card_number'], pts, disc)
+    else:
+        msg = ('🏪 {}\n'
+               '✅ Compra: R${:.2f}\n'
+               '➕ +{} pontos\n'
+               '⭐ Total: {} pts ({})\n'
+               '💰 Desconto: {}%\n'
+               'A sua escolha Feliz! 🎉').format(loja, valor, pts, new_pts, tier, disc)
+
+    send_whatsapp(phone, msg)
+
+    owner_phone = store.get('owner_phone','')
+    alerta = float(store.get('alerta_valor','300'))
+    if valor >= alerta and owner_phone:
+        alert_msg = ('⚠️ ALERTA Terminal Sao Luis\n'
+                     'Valor: R${:.2f}\n'
+                     'Fone: {}\n'
+                     'Pts: +{}\n'
+                     'Hora: {}').format(valor, phone, pts, datetime.now().strftime('%d/%m %H:%M'))
+        send_whatsapp(owner_phone, alert_msg)
+
+    db_audit('terminal','pontuar',u['id'],'phone:{} valor:{:.2f} pts:{}'.format(phone,valor,pts), ip)
+
+    return jsonify({'ok':True,'novo':novo,'points_added':pts,'total_points':new_pts,
+                    'tier':tier,'discount':disc,'card':u.get('card_number',''),'name':u['name']})
+
+def db_get_all_transactions_today(today):
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("SELECT id,user_id,type,points,description,date,created_by FROM transactions WHERE date LIKE %s", (today+'%',))
+        rows = cur.fetchall(); cur.close()
+        cols = ["id","user_id","type","points","description","date","created_by"]
+        return [dict(zip(cols,r)) for r in rows]
+    return load_json(TRANSACTIONS_FILE, [])
+
+def _get_user_phone_from_tx(tx):
+    u = db_get_user(tx.get('user_id',''))
+    return u.get('phone','') if u else ''
