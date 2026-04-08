@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#1A52C8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="São Luis">
+<title>{% block title %}São Luis Fidelidade{% endblock %}</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&family=Orbitron:wght@700;800&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --blue:#1A52C8;--red:#DC1E28;--dark:#0D1B3E;
+  --gold:#F5A623;--green:#00C48C;--bg:#F0F4FF;
+  --white:#fff;--gray:#9CA3AF;--light:#F3F4F6;
+  --danger:#DC1E28;
+}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh;}
+.app{max-width:430px;margin:0 auto;padding:14px;min-height:100vh;}
+
+/* BUTTONS */
+.btn-primary{width:100%;padding:15px;border:none;border-radius:14px;background:linear-gradient(90deg,var(--blue),var(--red));color:#fff;font-family:'Nunito',sans-serif;font-size:15px;font-weight:900;cursor:pointer;transition:opacity .15s;}
+.btn-primary:active{opacity:.85;}
+.btn-dark{width:100%;padding:15px;border:none;border-radius:14px;background:var(--dark);color:#fff;font-family:'Nunito',sans-serif;font-size:15px;font-weight:900;cursor:pointer;}
+.btn-ghost{width:100%;padding:12px;border:2px solid var(--light);border-radius:13px;background:transparent;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:var(--gray);cursor:pointer;margin-top:8px;}
+.btn-danger{width:100%;padding:12px;border:none;border-radius:13px;background:var(--danger);color:#fff;font-family:'Nunito',sans-serif;font-size:13px;font-weight:900;cursor:pointer;margin-top:8px;}
+
+/* CARDS */
+.wcard{background:#fff;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.05);}
+
+/* FORM */
+.sec-title{font-size:15px;font-weight:900;color:var(--dark);margin-bottom:10px;}
+.finput{width:100%;padding:12px 14px;border:2px solid var(--light);border-radius:12px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;color:var(--dark);background:#FAFAFA;outline:none;margin-bottom:10px;transition:border .2s;}
+.finput:focus{border-color:var(--blue);background:#fff;}
+.flbl{font-size:11px;font-weight:800;color:var(--gray);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;display:block;}
+.ferror{font-size:12px;color:var(--danger);font-weight:700;margin-top:-6px;margin-bottom:8px;display:none;}
+.ferror.show{display:block;}
+
+/* NAV */
+.bottom-nav{display:flex;background:#fff;border-radius:20px;padding:8px;gap:4px;margin-bottom:16px;box-shadow:0 2px 16px rgba(0,0,0,.07);}
+.bnav{flex:1;padding:9px 4px;border:none;border-radius:14px;font-family:'Nunito',sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:transparent;color:var(--gray);display:flex;flex-direction:column;align-items:center;gap:2px;transition:all .2s;}
+.bnav .bi{font-size:18px;}
+.bnav.active{background:var(--dark);color:#fff;}
+
+/* TOAST */
+.toast-msg{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--dark);color:#fff;padding:12px 22px;border-radius:50px;font-size:13px;font-weight:800;box-shadow:0 6px 24px rgba(0,0,0,.2);transition:transform .35s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;pointer-events:none;}
+.toast-msg.show{transform:translateX(-50%) translateY(0);}
+
+/* LOADING */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(13,27,62,.85);z-index:9998;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.loading-overlay.show{display:flex;}
+.spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:#F5A623;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-txt{color:white;font-size:14px;font-weight:700;}
+
+/* INSTALL BANNER */
+.install-banner{background:linear-gradient(90deg,var(--blue),var(--dark));border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer;}
+.ib-icon{font-size:24px;}
+.ib-text{flex:1;}
+.ib-title{font-size:13px;font-weight:900;color:white;}
+.ib-sub{font-size:11px;color:rgba(255,255,255,.6);}
+.ib-btn{font-size:11px;font-weight:900;background:var(--gold);color:var(--dark);padding:6px 12px;border-radius:20px;white-space:nowrap;}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-txt" id="loading-txt">Carregando...</div>
+</div>
+
+<div class="app" id="approot">
+{% block content %}{% endblock %}
+</div>
+<div class="toast-msg" id="toast"></div>
+
+<script>
+// PWA Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+
+// Toast
+function showToast(msg, icon='✅') {
+  const t = document.getElementById('toast');
+  t.textContent = icon + ' ' + msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// Loading
+function showLoading(txt='Carregando...') {
+  document.getElementById('loading-txt').textContent = txt;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+
+// API
+async function api(url, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(url, opts);
+    if (r.status === 401) { window.location.href = '/login'; return null; }
+    return r.json();
+  } catch(e) {
+    showToast('Sem conexão com o servidor', '⚠️');
+    return null;
+  }
+}
+
+// PWA install prompt
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.style.display = 'flex';
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.style.display = 'none';
+  });
+}
+
+async function logout() {
+  await api('/api/logout', 'POST');
+  window.location.href = '/login';
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

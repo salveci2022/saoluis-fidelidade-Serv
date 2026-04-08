@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Cadastro • São Luis Fidelidade{% endblock %}
+{% block extra_head %}
+<style>
+.cad-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;padding:8px;}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.mode-btn{padding:12px 8px;border:2px solid #E5E7EB;border-radius:14px;background:#fff;cursor:pointer;text-align:center;transition:all .2s;font-family:'Nunito',sans-serif;}
+.mode-btn .mi{font-size:22px;display:block;margin-bottom:3px;}
+.mode-btn .ml{font-size:11px;font-weight:800;color:#374151;}
+.mode-btn.sel{border-color:#1A52C8;background:#EEF2FF;}
+.success-card{background:linear-gradient(135deg,#0D1B3E,#1A52C8);border-radius:20px;padding:24px;text-align:center;color:white;display:none;}
+.success-card.show{display:block;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="cad-wrap">
+  <div style="text-align:center;margin-bottom:20px;">
+    <div style="font-family:'Russo One',sans-serif;font-size:44px;color:#DC1E28;line-height:1;">S</div>
+    <div style="font-family:'Russo One',sans-serif;font-size:20px;color:#1A52C8;letter-spacing:2px;">ÃO LUIS</div>
+    <div style="font-size:12px;color:#9CA3AF;font-style:italic;margin-top:2px;">Cadastre-se e ganhe descontos!</div>
+  </div>
+
+  <div class="wcard" style="width:100%;max-width:360px;" id="form-card">
+    <div style="font-size:18px;font-weight:900;margin-bottom:4px;">Criar conta grátis 🎉</div>
+    <div style="font-size:12px;color:#9CA3AF;margin-bottom:14px;">Escolha como quer se cadastrar:</div>
+
+    <div class="mode-grid">
+      <button class="mode-btn sel" id="btn-wa" onclick="setMode('whatsapp')">
+        <span class="mi">📱</span><span class="ml">Só WhatsApp</span>
+      </button>
+      <button class="mode-btn" id="btn-em" onclick="setMode('email')">
+        <span class="mi">📧</span><span class="ml">Email + Senha</span>
+      </button>
+    </div>
+
+    <label class="flbl">Seu nome completo</label>
+    <input class="finput" id="name" placeholder="Ex: Maria da Silva" autocomplete="name"/>
+
+    <label class="flbl">WhatsApp (para receber promoções)</label>
+    <input class="finput" id="phone" type="tel" placeholder="(61) 9XXXX-XXXX" autocomplete="tel"/>
+
+    <div id="email-fields" style="display:none;">
+      <label class="flbl">Email</label>
+      <input class="finput" id="email" type="email" placeholder="seu@email.com" autocomplete="email"/>
+    </div>
+
+    <label class="flbl">Senha</label>
+    <input class="finput" id="pw" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"/>
+
+    <div class="ferror" id="cad-err"></div>
+    <button class="btn-primary" id="cad-btn" onclick="doCadastro()">🎉 Criar minha conta grátis</button>
+    <div style="text-align:center;margin-top:12px;font-size:13px;color:#9CA3AF;">
+      Já tem conta? <a href="/login" style="color:#1A52C8;font-weight:800;text-decoration:none;">Entrar</a>
+    </div>
+  </div>
+
+  <div class="success-card" id="success-card" style="width:100%;max-width:360px;">
+    <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+    <div style="font-size:20px;font-weight:900;margin-bottom:8px;">Conta criada!</div>
+    <div style="font-size:14px;opacity:.8;margin-bottom:16px;">Seu cartão digital está ativo!</div>
+    <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:11px;opacity:.6;margin-bottom:4px;">Número do seu cartão</div>
+      <div style="font-family:'Orbitron',monospace;font-size:16px;font-weight:700;color:#F5A623;" id="card-num">---</div>
+    </div>
+    <div style="font-size:12px;opacity:.7;margin-bottom:16px;">Você receberá uma mensagem de boas-vindas no WhatsApp!</div>
+    <button class="btn-primary" onclick="window.location.href='/login'">Entrar agora →</button>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let mode = 'whatsapp';
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-wa').className = 'mode-btn' + (m==='whatsapp'?' sel':'');
+  document.getElementById('btn-em').className = 'mode-btn' + (m==='email'?' sel':'');
+  document.getElementById('email-fields').style.display = m==='email' ? 'block' : 'none';
+}
+
+async function doCadastro() {
+  const name  = document.getElementById('name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const email = mode==='email' ? document.getElementById('email').value.trim() : '';
+  const pw    = document.getElementById('pw').value;
+  const err   = document.getElementById('cad-err');
+  const btn   = document.getElementById('cad-btn');
+
+  err.classList.remove('show');
+  if (!name) { err.textContent = 'Informe seu nome.'; err.classList.add('show'); return; }
+  if (!phone && !email) { err.textContent = 'Informe WhatsApp ou email.'; err.classList.add('show'); return; }
+  if (!pw || pw.length < 6) { err.textContent = 'Senha muito curta (mínimo 6 caracteres).'; err.classList.add('show'); return; }
+
+  btn.textContent = 'Criando conta...';
+  btn.disabled = true;
+  showLoading('Criando seu cartão digital...');
+
+  const res = await api('/api/cadastro', 'POST', { name, phone, email, password: pw });
+  hideLoading();
+  btn.textContent = '🎉 Criar minha conta grátis';
+  btn.disabled = false;
+
+  if (!res) return;
+  if (res.ok) {
+    document.getElementById('form-card').style.display = 'none';
+    document.getElementById('card-num').textContent = res.card;
+    document.getElementById('success-card').classList.add('show');
+  } else {
+    err.textContent = res.msg || 'Erro ao cadastrar.';
+    err.classList.add('show');
+  }
+}
+</script>
+{% endblock %}

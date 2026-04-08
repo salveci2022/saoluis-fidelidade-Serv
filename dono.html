@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Painel Dono • São Luis{% endblock %}
+{% block extra_head %}
+<style>
+.dash-header{background:linear-gradient(135deg,#0D1B3E,#1A52C8);border-radius:18px;padding:18px;color:white;margin-bottom:14px;}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.stat-c{background:white;border-radius:16px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+.stat-val{font-size:22px;font-weight:900;color:#0D1B3E;line-height:1;}
+.stat-lbl{font-size:11px;color:#9CA3AF;font-weight:700;margin-top:3px;}
+.dpill{padding:7px 13px;border:2px solid #E5E7EB;border-radius:10px;background:white;font-family:Nunito,sans-serif;font-size:13px;font-weight:800;cursor:pointer;color:#374151;margin-bottom:4px;}
+.dpill.sel{background:#DC1E28;border-color:#DC1E28;color:white;}
+.cust-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F3F4F6;}
+.cust-item:last-child{border-bottom:none;}
+.cust-av{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:white;flex-shrink:0;}
+.modal-wrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:flex-end;justify-content:center;}
+.modal-wrap.open{display:flex;}
+.modal-box{background:white;border-radius:24px 24px 0 0;padding:24px;width:100%;max-width:430px;}
+.audit-item{padding:8px 0;border-bottom:1px solid #F3F4F6;font-size:12px;}
+.audit-item:last-child{border-bottom:none;}
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="modal-wrap" id="modal-cad">
+  <div class="modal-box">
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;">Novo Cliente</div>
+    <label class="flbl">Nome completo</label>
+    <input class="finput" id="nc-name" placeholder="Ex: Maria da Silva"/>
+    <label class="flbl">WhatsApp</label>
+    <input class="finput" id="nc-phone" type="tel" placeholder="(61) 9XXXX-XXXX"/>
+    <label class="flbl">Senha (opcional)</label>
+    <input class="finput" id="nc-pw" placeholder="Padrao: ultimos 4 digitos do WhatsApp"/>
+    <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px;">O cliente recebera boas-vindas no WhatsApp</div>
+    <p id="nc-err" style="color:#DC1E28;font-size:12px;font-weight:700;display:none;margin-bottom:8px;"></p>
+    <button class="btn-primary" id="nc-btn" onclick="doNovoCad()">Cadastrar cliente</button>
+    <button class="btn-ghost" onclick="fecharModal('modal-cad')">Cancelar</button>
+  </div>
+</div>
+
+<div class="modal-wrap" id="modal-pts">
+  <div class="modal-box">
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;">Registrar Compra</div>
+    <label class="flbl">Cliente</label>
+    <select class="finput" id="pts-cliente"></select>
+    <label class="flbl">Valor da compra (R$)</label>
+    <input class="finput" id="pts-valor" type="number" placeholder="Ex: 85.50" min="0.01" step="0.01" oninput="previewPts()"/>
+    <p id="pts-preview" style="font-size:12px;color:#1A52C8;font-weight:700;margin-bottom:12px;min-height:18px;"></p>
+    <button class="btn-primary" id="pts-btn" onclick="doAddPts()">Confirmar e enviar WhatsApp</button>
+    <button class="btn-ghost" onclick="fecharModal('modal-pts')">Cancelar</button>
+  </div>
+</div>
+
+<div id="nav-wrap"></div>
+<div id="main-wrap">
+  <div style="text-align:center;padding:60px 20px;">
+    <div class="spinner" style="margin:0 auto 16px;"></div>
+    <div style="color:#9CA3AF;font-weight:700;">Carregando painel...</div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+var TAB = 'dash';
+var STATS = {};
+var CLIENTS = [];
+var DISC = '5%';
+var AVC = ['#1A52C8','#00C48C','#DC1E28','#9CA3AF','#7C3AED','#F5A623'];
+var TABS = [
+  {id:'dash',  icon:'📊', lbl:'Painel'},
+  {id:'enviar',icon:'📣', lbl:'Promocao'},
+  {id:'clist', icon:'👥', lbl:'Clientes'},
+  {id:'pontos',icon:'➕', lbl:'Pontos'},
+  {id:'config',icon:'⚙️', lbl:'Config'}
+];
+
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function tierBadge(t){
+  var styles = {Ouro:'background:#FFFBEB;color:#B45309;',Prata:'background:#F3F4F6;color:#4B5563;',Bronze:'background:#FEF3C7;color:#92400E;'};
+  var icons  = {Ouro:'Ouro',Prata:'Prata',Bronze:'Bronze'};
+  return '<span style="' + (styles[t]||'') + 'border-radius:20px;padding:3px 10px;font-size:10px;font-weight:900;">' + (icons[t]||t) + '</span>';
+}
+
+function initials(name){
+  return name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase();
+}
+
+function htmlDash(){
+  var eng = STATS.engagement || [45,62,38,80,55,95,72];
+  var mx  = Math.max.apply(null, eng);
+  var tr  = STATS.tiers || {Ouro:0,Prata:0,Bronze:0};
+  var DAYS2 = ['S','T','Q','Q','S','S','D'];
+  var bars = '';
+  for(var i=0; i<eng.length; i++){
+    bars += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">' +
+      '<div style="width:100%;background:' + (i===5?'#DC1E28':'#E5E7EB') + ';border-radius:4px 4px 0 0;height:' + Math.round((eng[i]/mx)*100) + '%;"></div>' +
+      '<div style="font-size:9px;color:#D1D5DB;font-weight:700;">' + DAYS2[i] + '</div></div>';
+  }
+  return '<div class="dash-header">' +
+    '<div style="display:flex;justify-content:space-between;">' +
+    '<div><div style="font-size:16px;font-weight:900;color:#F5A623;">Sao Luis</div>' +
+    '<div style="font-size:11px;color:rgba(255,255,255,.5);">Santa Maria - Brasilia-DF</div></div>' +
+    '<div style="font-size:13px;font-weight:800;color:#00C48C;">Online</div></div></div>' +
+    '<div class="stats-grid">' +
+    '<div class="stat-c"><div style="font-size:20px;margin-bottom:5px;">👥</div><div class="stat-val">' + (STATS.total_customers||0) + '</div><div class="stat-lbl">Clientes</div></div>' +
+    '<div class="stat-c"><div style="font-size:20px;margin-bottom:5px;">🛒</div><div class="stat-val">' + (STATS.today_purchases||0) + '</div><div class="stat-lbl">Compras hoje</div></div>' +
+    '<div class="stat-c"><div style="font-size:20px;margin-bottom:5px;">💰</div><div class="stat-val">R$' + (((STATS.today_revenue||0)/1000).toFixed(1)) + 'k</div><div class="stat-lbl">Faturamento</div></div>' +
+    '<div class="stat-c"><div style="font-size:20px;margin-bottom:5px;">📣</div><div class="stat-val">' + (STATS.active_promos||0) + '</div><div class="stat-lbl">Promocoes</div></div>' +
+    '</div>' +
+    '<div class="wcard"><div class="sec-title" style="margin-bottom:10px;">Engajamento semanal</div>' +
+    '<div style="display:flex;gap:4px;align-items:flex-end;height:70px;margin-bottom:6px;">' + bars + '</div></div>' +
+    '<div class="wcard"><div class="sec-title" style="margin-bottom:10px;">Niveis de clientes</div>' +
+    '<div style="display:flex;gap:14px;">' +
+    '<div style="flex:1;text-align:center;"><div style="height:5px;background:#F5A623;border-radius:3px;margin-bottom:6px;"></div><div style="font-size:18px;font-weight:900;">' + tr.Ouro + '</div><div style="font-size:10px;color:#9CA3AF;">Ouro</div></div>' +
+    '<div style="width:1px;background:#F3F4F6;"></div>' +
+    '<div style="flex:1;text-align:center;"><div style="height:5px;background:#9CA3AF;border-radius:3px;margin-bottom:6px;"></div><div style="font-size:18px;font-weight:900;">' + tr.Prata + '</div><div style="font-size:10px;color:#9CA3AF;">Prata</div></div>' +
+    '<div style="width:1px;background:#F3F4F6;"></div>' +
+    '<div style="flex:1;text-align:center;"><div style="height:5px;background:#CD7F32;border-radius:3px;margin-bottom:6px;"></div><div style="font-size:18px;font-weight:900;">' + tr.Bronze + '</div><div style="font-size:10px;color:#9CA3AF;">Bronze</div></div>' +
+    '</div></div>';
+}
+
+function htmlEnviar(){
+  var discs = ['0,5%','1%','2%','5%','8%','10%'];
+  var pills = '';
+  for(var i=0;i<discs.length;i++){
+    pills += '<button class="dpill ' + (DISC===discs[i]?'sel':'') + '" onclick="DISC=\'' + discs[i] + '\';reRender()">' + discs[i] + '</button>';
+  }
+  return '<div class="sec-title">Enviar Promocao</div>' +
+    '<div class="wcard">' +
+    '<label class="flbl">Nome da promocao</label><input class="finput" id="p-title" value="Quinta da Carne"/>' +
+    '<label class="flbl">Produto</label><input class="finput" id="p-product" value="Carnes e Aves"/>' +
+    '<label class="flbl">Desconto</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' + pills + '</div>' +
+    '<label class="flbl">Duracao</label>' +
+    '<select class="finput" id="p-dur"><option value="1">Hoje (24h)</option><option value="2">2 dias</option><option value="3">3 dias</option><option value="7">Semana</option></select>' +
+    '<label class="flbl">Enviar para</label>' +
+    '<select class="finput" id="p-target"><option value="all">Todos (' + CLIENTS.length + ')</option><option value="ouro">Nivel Ouro</option><option value="prata_ouro">Prata + Ouro</option></select>' +
+    '<button class="btn-primary" onclick="doEnviarPromo()">Enviar no WhatsApp</button></div>';
+}
+
+function htmlClientes(){
+  var rows = '';
+  var slice = CLIENTS.slice(0,20);
+  for(var i=0;i<slice.length;i++){
+    var c = slice[i];
+    var cid = c.id.replace(/'/g,'');
+    var cname = c.name.replace(/'/g,'').replace(/"/g,'');
+    rows += '<div class="cust-item">' +
+      '<div class="cust-av" style="background:' + AVC[i%AVC.length] + ';">' + initials(c.name) + '</div>' +
+      '<div style="flex:1;"><div style="font-size:13px;font-weight:800;">' + c.name + '</div>' +
+      '<div style="font-size:11px;color:#9CA3AF;">' + (c.points||0).toLocaleString('pt-BR') + ' pts - ' + c.discount + '% desc</div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;">' + tierBadge(c.tier) +
+      '<button onclick="doExcluir(\'' + cid + '\',\'' + cname + '\')" style="background:#FEF2F2;border:none;border-radius:8px;padding:5px 8px;cursor:pointer;font-size:14px;">X</button>' +
+      '</div></div>';
+  }
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+    '<div class="sec-title" style="margin-bottom:0;">Clientes (' + CLIENTS.length + ')</div>' +
+    '<button onclick="abrirModal(\'modal-cad\')" style="background:#0D1B3E;color:white;border:none;border-radius:10px;padding:8px 14px;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:pointer;">+ Novo</button>' +
+    '</div>' +
+    '<div class="wcard">' + (rows||'<div style="text-align:center;padding:20px;color:#9CA3AF;">Nenhum cliente ainda.</div>') + '</div>';
+}
+
+function htmlPontos(){
+  return '<div class="sec-title">Registrar Compra</div>' +
+    '<div class="wcard" style="text-align:center;padding:24px;">' +
+    '<div style="font-size:48px;margin-bottom:12px;">🛒</div>' +
+    '<div style="font-size:15px;font-weight:900;margin-bottom:6px;">Adicionar pontos ao cliente</div>' +
+    '<div style="font-size:13px;color:#9CA3AF;margin-bottom:18px;">Digite o valor da compra e os pontos entram automaticamente.</div>' +
+    '<button class="btn-primary" onclick="abrirModalPts()">Registrar compra</button></div>';
+}
+
+function htmlConfig(){
+  return '<div class="sec-title">Configuracoes</div>' +
+    '<div class="wcard">' +
+    '<label class="flbl">Nome do mercado</label><input class="finput" id="cfg-name" value="Supermercado Sao Luis"/>' +
+    '<label class="flbl">Telefone</label><input class="finput" id="cfg-phone" value="(61) 3393-3233"/>' +
+    '<label class="flbl">Endereco</label><input class="finput" id="cfg-addr" value="QR 209 - Santa Maria, Brasilia-DF"/>' +
+    '<label class="flbl">Pontos por R$1</label><input class="finput" id="cfg-pts" type="number" value="1" min="1"/>' +
+    '<button class="btn-primary" onclick="doSaveConfig()">Salvar configuracoes</button></div>' +
+    '<div class="wcard">' +
+    '<div class="sec-title" style="margin-bottom:10px;">Alterar senha</div>' +
+    '<input class="finput" id="pw-old" type="password" placeholder="Senha atual"/>' +
+    '<input class="finput" id="pw-new" type="password" placeholder="Nova senha (min. 6)"/>' +
+    '<input class="finput" id="pw-c" type="password" placeholder="Confirmar nova senha"/>' +
+    '<p id="pw-err" style="color:#DC1E28;font-size:12px;font-weight:700;display:none;margin-bottom:8px;"></p>' +
+    '<button class="btn-dark" onclick="doChangePw()">Alterar senha</button></div>' +
+    '<div class="wcard"><div class="sec-title" style="margin-bottom:10px;">Log de atividades</div>' +
+    '<div id="audit-wrap" style="font-size:12px;color:#9CA3AF;">Carregando...</div></div>' +
+    '<button class="btn-ghost" style="color:#DC1E28;border-color:#FCA5A5;" onclick="logout()">Sair da conta</button>';
+}
+
+function reRender(){
+  var html = '';
+  if(TAB==='dash')   html = htmlDash();
+  if(TAB==='enviar') html = htmlEnviar();
+  if(TAB==='clist')  html = htmlClientes();
+  if(TAB==='pontos') html = htmlPontos();
+  if(TAB==='config') html = htmlConfig();
+  html += '<button class="btn-ghost" onclick="logout()" style="margin-top:8px;">Sair da conta</button>';
+  document.getElementById('main-wrap').innerHTML = html;
+  if(TAB==='config') setTimeout(loadAudit, 100);
+}
+
+function render(){
+  var nav = '<div class="bottom-nav">';
+  for(var i=0;i<TABS.length;i++){
+    var t = TABS[i];
+    nav += '<button class="bnav ' + (TAB===t.id?'active':'') + '" onclick="TAB=\'' + t.id + '\';render()">' +
+      '<span class="bi">' + t.icon + '</span>' + t.lbl + '</button>';
+  }
+  nav += '</div>';
+  document.getElementById('nav-wrap').innerHTML = nav;
+  reRender();
+}
+
+function previewPts(){
+  var v = parseFloat(document.getElementById('pts-valor').value||0);
+  var p = Math.round(v);
+  var el = document.getElementById('pts-preview');
+  if(el) el.textContent = p > 0 ? ('+' + p + ' pontos para o cliente') : '';
+}
+
+async function doEnviarPromo(){
+  var title   = document.getElementById('p-title').value;
+  var product = document.getElementById('p-product').value;
+  var days    = document.getElementById('p-dur').value;
+  var target  = document.getElementById('p-target').value;
+  showLoading('Enviando no WhatsApp...');
+  var res = await api('/api/dono/send_promo','POST',{title:title,product:product,discount:DISC,days:days,target:target});
+  hideLoading();
+  if(res && res.ok) showToast('Enviado para ' + res.sent + ' clientes!','🚀');
+  else showToast('Erro ao enviar','❌');
+}
+
+function abrirModalPts(){
+  var sel = document.getElementById('pts-cliente');
+  var opts = '';
+  for(var i=0;i<CLIENTS.length;i++){
+    var c = CLIENTS[i];
+    opts += '<option value="' + c.id + '">' + c.name + ' (' + (c.points||0).toLocaleString('pt-BR') + ' pts)</option>';
+  }
+  sel.innerHTML = opts;
+  document.getElementById('pts-valor').value = '';
+  document.getElementById('pts-preview').textContent = '';
+  abrirModal('modal-pts');
+}
+
+async function doAddPts(){
+  var uid = document.getElementById('pts-cliente').value;
+  var val = document.getElementById('pts-valor').value;
+  if(!val || parseFloat(val) <= 0){ showToast('Informe o valor da compra','❌'); return; }
+  document.getElementById('pts-btn').disabled = true;
+  showLoading('Adicionando pontos...');
+  var res = await api('/api/dono/add_points','POST',{user_id:uid,value:val});
+  hideLoading();
+  document.getElementById('pts-btn').disabled = false;
+  if(res && res.ok){
+    showToast('+' + Math.round(val) + ' pontos! Nivel: ' + res.tier,'✅');
+    fecharModal('modal-pts');
+    var c2 = await api('/api/dono/clientes');
+    if(c2) CLIENTS = c2;
+    reRender();
+  } else showToast(res && res.msg ? res.msg : 'Erro','❌');
+}
+
+async function doExcluir(uid, nome){
+  if(!window.confirm('Excluir o cliente ' + nome + '?')) return;
+  showLoading('Excluindo...');
+  var res = await api('/api/dono/excluir_cliente','POST',{user_id:uid});
+  hideLoading();
+  if(res && res.ok){
+    showToast(nome + ' excluido!','🗑');
+    var c2 = await api('/api/dono/clientes');
+    if(c2) CLIENTS = c2;
+    reRender();
+  } else showToast(res && res.msg ? res.msg : 'Erro','❌');
+}
+
+async function doNovoCad(){
+  var name  = document.getElementById('nc-name').value.trim();
+  var phone = document.getElementById('nc-phone').value.trim();
+  var pw    = document.getElementById('nc-pw').value.trim();
+  var err   = document.getElementById('nc-err');
+  err.style.display = 'none';
+  if(!name){ err.textContent='Informe o nome.'; err.style.display='block'; return; }
+  if(!phone){ err.textContent='Informe o WhatsApp.'; err.style.display='block'; return; }
+  document.getElementById('nc-btn').disabled = true;
+  showLoading('Cadastrando...');
+  var res = await api('/api/dono/cadastrar_cliente','POST',{name:name,phone:phone,password:pw});
+  hideLoading();
+  document.getElementById('nc-btn').disabled = false;
+  if(res && res.ok){
+    fecharModal('modal-cad');
+    document.getElementById('nc-name').value = '';
+    document.getElementById('nc-phone').value = '';
+    document.getElementById('nc-pw').value = '';
+    showToast(name + ' cadastrado!','✅');
+    var c2 = await api('/api/dono/clientes');
+    if(c2) CLIENTS = c2;
+    reRender();
+  } else {
+    err.textContent = (res && res.msg) ? res.msg : 'Erro ao cadastrar.';
+    err.style.display = 'block';
+  }
+}
+
+async function doSaveConfig(){
+  var data = {
+    name:           document.getElementById('cfg-name').value,
+    phone:          document.getElementById('cfg-phone').value,
+    address:        document.getElementById('cfg-addr').value,
+    points_per_real:document.getElementById('cfg-pts').value
+  };
+  var res = await api('/api/dono/store','POST',data);
+  if(res && res.ok) showToast('Configuracoes salvas!','⚙️');
+}
+
+async function doChangePw(){
+  var old  = document.getElementById('pw-old').value;
+  var nw   = document.getElementById('pw-new').value;
+  var conf = document.getElementById('pw-c').value;
+  var err  = document.getElementById('pw-err');
+  err.style.display = 'none';
+  if(nw !== conf){ err.textContent='As senhas nao coincidem.'; err.style.display='block'; return; }
+  if(nw.length < 6){ err.textContent='Senha muito curta.'; err.style.display='block'; return; }
+  var res = await api('/api/change_password','POST',{current:old,'new':nw});
+  if(res && res.ok) showToast('Senha alterada!','🔐');
+  else { err.textContent=(res&&res.msg)?res.msg:'Erro.'; err.style.display='block'; }
+}
+
+async function loadAudit(){
+  var el = document.getElementById('audit-wrap');
+  if(!el) return;
+  var logs = await api('/api/dono/audit');
+  if(!logs || !logs.length){ el.textContent='Nenhuma atividade ainda.'; return; }
+  var html = '';
+  for(var i=0;i<Math.min(logs.length,15);i++){
+    var l = logs[i];
+    html += '<div class="audit-item"><strong>' + l.actor + '</strong> - ' + l.action +
+      (l.detail ? ' (' + l.detail + ')' : '') +
+      '<div style="color:#D1D5DB;">' + String(l.ts||'').slice(0,16) + '</div></div>';
+  }
+  el.innerHTML = html;
+}
+
+async function init(){
+  try {
+    showLoading('Carregando painel...');
+    var r1 = await api('/api/dono/stats');
+    var r2 = await api('/api/dono/clientes');
+    hideLoading();
+    if(!r1 || !r2){
+      document.getElementById('main-wrap').innerHTML =
+        '<div style="text-align:center;padding:40px 20px;">' +
+        '<div style="font-size:40px;margin-bottom:12px;">⚠️</div>' +
+        '<div style="font-weight:900;margin-bottom:8px;">Erro ao carregar o painel</div>' +
+        '<div style="color:#9CA3AF;margin-bottom:16px;">O servidor pode estar iniciando. Aguarde 30 segundos e tente novamente.</div>' +
+        '<button class="btn-primary" onclick="location.reload()">Tentar novamente</button>' +
+        '<button class="btn-ghost" onclick="logout()">Voltar ao login</button></div>';
+      return;
+    }
+    STATS   = r1;
+    CLIENTS = r2;
+    render();
+  } catch(e) {
+    hideLoading();
+    document.getElementById('main-wrap').innerHTML =
+      '<div style="text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:14px;font-weight:700;color:#DC1E28;">Erro: ' + e.message + '</div>' +
+      '<button class="btn-primary" style="margin-top:16px;" onclick="location.reload()">Tentar novamente</button></div>';
+  }
+}
+
+init();
+</script>
+{% endblock %}

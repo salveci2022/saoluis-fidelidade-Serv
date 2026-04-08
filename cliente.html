@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Meu Cartão • São Luis{% endblock %}
+{% block extra_head %}
+<style>
+.sl-card{width:100%;height:188px;border-radius:22px;background:#0D1B3E;position:relative;overflow:hidden;margin-bottom:14px;box-shadow:0 8px 30px rgba(13,27,62,.35);}
+.sl-arc1{position:absolute;width:230px;height:230px;border-radius:50%;border:34px solid rgba(220,30,40,.18);top:-65px;right:-55px;}
+.sl-arc2{position:absolute;width:130px;height:130px;border-radius:50%;border:20px solid rgba(26,82,200,.14);bottom:-45px;left:-28px;}
+.sl-stripe{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#DC1E28,#1A52C8);border-radius:22px 22px 0 0;}
+.sl-side{position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,#1A52C8,#DC1E28);border-radius:22px 0 0 22px;}
+.sl-cc{position:relative;z-index:2;padding:14px 16px 12px 18px;height:100%;display:flex;flex-direction:column;justify-content:space-between;}
+.sl-pts{font-family:'Orbitron',monospace;font-size:24px;font-weight:800;color:#F5A623;line-height:1;text-align:right;}
+.bar-track{height:10px;background:#F3F4F6;border-radius:5px;overflow:hidden;margin-bottom:6px;}
+.bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#1A52C8,#DC1E28);transition:width 1s ease;}
+.blbl{font-size:9px;font-weight:800;color:#D1D5DB;}
+.promo-alert{background:#0D1B3E;border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px;animation:gpulse 2.5s infinite;}
+@keyframes gpulse{0%,100%{box-shadow:0 4px 20px rgba(220,30,40,.2);}50%{box-shadow:0 4px 28px rgba(220,30,40,.5);}}
+.notif-item,.hist-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F3F4F6;}
+.notif-item:last-child,.hist-item:last-child{border-bottom:none;}
+.ni-icon,.hi-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.ni-dot{width:8px;height:8px;border-radius:50%;background:#DC1E28;flex-shrink:0;}
+.pts-pos{color:#00C48C;font-size:14px;font-weight:900;}
+.pts-neg{color:#DC1E28;font-size:14px;font-weight:900;}
+.qr-box{width:150px;height:150px;background:#0D1B3E;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;}
+.qr-inner{width:118px;height:118px;background:white;border-radius:6px;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px;}
+.qc{border-radius:1px;}
+.pw-section{border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px;}
+</style>
+{% endblock %}
+{% block content %}
+<div id="install-banner" class="install-banner" style="display:none;" onclick="installPWA()">
+  <div class="ib-icon">📲</div>
+  <div class="ib-text">
+    <div class="ib-title">Instalar como app!</div>
+    <div class="ib-sub">Acesse sem abrir o navegador</div>
+  </div>
+  <div class="ib-btn">Instalar</div>
+</div>
+<div id="nav-area"></div>
+<div id="content-area"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let tab='card', U={}, TX=[], PR=[];
+
+const tabs=[
+  {id:'card',icon:'💳',lbl:'Cartão'},
+  {id:'promos',icon:'🔔',lbl:'Promoções'},
+  {id:'pontos',icon:'⭐',lbl:'Pontos'},
+  {id:'qr',icon:'📱',lbl:'QR Code'},
+  {id:'config',icon:'⚙️',lbl:'Config'},
+];
+
+async function loadData(){
+  showLoading('Carregando seu cartão...');
+  [U, TX, PR] = await Promise.all([
+    api('/api/cliente/me'),
+    api('/api/cliente/transactions'),
+    api('/api/cliente/promos'),
+  ]);
+  hideLoading();
+  if(!U) return;
+  render();
+}
+
+function tierIcon(t){ return t==='Ouro'?'⭐':t==='Prata'?'🥈':'🥉'; }
+function discWidth(d){ return Math.round((d/10)*100)+'%'; }
+
+function qrCells(){
+  let s='';
+  for(let i=0;i<49;i++) s+=`<div class="qc" style="background:${Math.random()>.44?'#0D1B3E':'white'}"></div>`;
+  return s;
+}
+
+function slCard(){
+  return `
+  <div class="sl-card">
+    <div class="sl-arc1"></div><div class="sl-arc2"></div>
+    <div class="sl-stripe"></div><div class="sl-side"></div>
+    <div class="sl-cc">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-size:7px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase;">Supermercado</div>
+          <div style="display:flex;align-items:baseline;gap:3px;">
+            <span style="font-family:'Russo One',sans-serif;font-size:22px;color:#DC1E28;">S</span>
+            <span style="font-family:'Russo One',sans-serif;font-size:13px;color:#1A52C8;letter-spacing:1px;">ÃO LUIS</span>
+          </div>
+          <div style="font-size:7px;font-weight:700;color:rgba(255,255,255,.3);font-style:italic;">A sua escolha Feliz!</div>
+        </div>
+        <div style="width:30px;height:23px;border-radius:4px;background:linear-gradient(135deg,#DAA520,#B8860B);display:flex;align-items:center;justify-content:center;">
+          <div style="width:19px;height:15px;border-radius:2px;border:1.5px solid rgba(0,0,0,.2);"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div style="font-size:7px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:2px;">Titular</div>
+          <div style="font-size:16px;font-weight:900;color:white;">${U.name||''}</div>
+          <div style="font-size:8px;color:rgba(255,255,255,.2);margin-top:1px;">Desde ${U.member_since||''}</div>
+        </div>
+        <div>
+          <div class="sl-pts">${(U.points||0).toLocaleString('pt-BR')}</div>
+          <div style="font-size:7px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(245,166,35,.5);text-align:right;">pontos</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-family:monospace;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.2);">${U.card_number||''}</div>
+        <div style="font-size:9px;font-weight:900;padding:3px 10px;border-radius:20px;background:rgba(245,166,35,.18);color:#F5A623;border:1px solid rgba(245,166,35,.35);">${tierIcon(U.tier)} ${U.tier||''}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCard(){
+  const d=U.discount||0; const promo=PR[0];
+  return `
+  ${slCard()}
+  ${promo?`<div class="promo-alert">
+    <div style="width:46px;height:46px;border-radius:12px;background:rgba(220,30,40,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🔥</div>
+    <div style="flex:1;"><div style="font-size:13px;font-weight:900;color:white;">Oferta ativa agora!</div><div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:1px;">${promo.title}</div></div>
+    <div style="text-align:right;"><div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:800;color:#F5A623;">${promo.discount}</div><div style="font-size:8px;color:rgba(245,166,35,.6);">extra</div></div>
+  </div>`:''}
+  <div class="wcard">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:13px;font-weight:800;">Seu desconto atual</span>
+      <span style="font-size:26px;font-weight:900;color:#DC1E28;">${d}%</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:${discWidth(d)}"></div></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      ${['0,5%','2%','4%','6%','8%','10%'].map(l=>`<span class="blbl">${l}</span>`).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:#6B7280;">📈 Acumule mais pontos para aumentar seu desconto!</div>
+  </div>
+  <div class="wcard" style="display:flex;gap:12px;text-align:center;">
+    <div style="flex:1;"><div style="font-size:20px;font-weight:900;">${(U.points||0).toLocaleString('pt-BR')}</div><div style="font-size:11px;color:#9CA3AF;font-weight:700;">pontos</div></div>
+    <div style="width:1px;background:#F3F4F6;"></div>
+    <div style="flex:1;"><div style="font-size:20px;font-weight:900;color:#DC1E28;">${d}%</div><div style="font-size:11px;color:#9CA3AF;font-weight:700;">desconto</div></div>
+    <div style="width:1px;background:#F3F4F6;"></div>
+    <div style="flex:1;"><div style="font-size:20px;font-weight:900;color:#1A52C8;">${U.tier||''}</div><div style="font-size:11px;color:#9CA3AF;font-weight:700;">nível</div></div>
+  </div>`;
+}
+
+function renderPromos(){
+  const demo=[
+    {icon:'🔥',bg:'#FEF3C7',title:'Oferta: Carnes 8% OFF',body:'São Luis • Santa Maria',time:'Agora',dot:true},
+    {icon:'⭐',bg:'#F0FDF4',title:'Pontos em dobro hoje!',body:'Sexta-feira especial',time:'2h atrás',dot:true},
+    {icon:'🧴',bg:'#EFF6FF',title:'Higiene pessoal 5% OFF',body:'Shampoos e sabonetes',time:'Ontem',dot:false},
+  ];
+  const list = PR.length ? PR.map(p=>({icon:'🔥',bg:'#FEF3C7',title:p.title,body:p.product+' • '+p.discount+' OFF',time:p.created_at,dot:true})) : demo;
+  return `
+  <div class="sec-title">🔔 Notificações</div>
+  <div class="wcard">
+    ${list.map(n=>`
+    <div class="notif-item">
+      <div class="ni-icon" style="background:${n.bg};">${n.icon}</div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:800;">${n.title}</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px;">${n.body}</div><div style="font-size:10px;color:#D1D5DB;margin-top:2px;">${n.time}</div></div>
+      ${n.dot?'<div class="ni-dot"></div>':''}
+    </div>`).join('')}
+  </div>
+  <button class="btn-dark" onclick="showToast('Alertas ativados! ✅','🔔')">🔔 Ativar alertas WhatsApp</button>`;
+}
+
+function renderPontos(){
+  const icons={purchase:'🛒',bonus:'🎁',discount:'💸'};
+  const bgs={purchase:'#F0FDF4',bonus:'#FFFBEB',discount:'#EFF6FF'};
+  const rows = TX.length ? TX : [{type:'purchase',points:120,description:'Compra no São Luis',date:'2025-07-05 09:42'}];
+  return `
+  <div class="sec-title">📊 Extrato de pontos</div>
+  <div class="wcard">
+    ${rows.map(t=>`
+    <div class="hist-item">
+      <div class="hi-icon" style="background:${bgs[t.type]||'#F3F4F6'};">${icons[t.type]||'📋'}</div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:800;">${t.description}</div><div style="font-size:11px;color:#9CA3AF;">${t.date}</div></div>
+      <div class="${t.points>0?'pts-pos':'pts-neg'}">${t.points>0?'+':''}${t.points} pts</div>
+    </div>`).join('')}
+  </div>
+  <div class="wcard" style="text-align:center;">
+    <div style="font-size:11px;color:#9CA3AF;font-weight:700;margin-bottom:4px;">Total acumulado</div>
+    <div style="font-size:36px;font-weight:900;">${(U.points||0).toLocaleString('pt-BR')}</div>
+    <div style="font-size:12px;color:#00C48C;font-weight:800;margin-top:2px;">Pontos válidos até Dez/2025</div>
+  </div>`;
+}
+
+function renderQR(){
+  const token = U.qr_token || '';
+  const card  = U.card_number || '';
+  const qrUrl = `/qr/${card}/${token}`;
+  return `
+  <div class="sec-title">📱 Meu QR Code</div>
+  <div class="wcard" style="text-align:center;">
+    <div class="qr-box"><div class="qr-inner">${qrCells()}</div></div>
+    <div style="font-size:15px;font-weight:900;margin-bottom:4px;">${U.name||''}</div>
+    <div style="font-size:12px;color:#9CA3AF;">Mostre na caixa para pontuar automaticamente</div>
+    <div style="font-size:11px;color:#1A52C8;font-weight:700;margin-top:6px;">${card}</div>
+    <div style="font-size:10px;color:#D1D5DB;margin-top:4px;">🔒 QR Code seguro com token único</div>
+  </div>
+  <div class="wcard" style="display:flex;align-items:center;gap:12px;">
+    <div style="font-size:28px;">📞</div>
+    <div><div style="font-size:13px;font-weight:800;">São Luis • Santa Maria</div>
+    <div style="font-size:12px;color:#9CA3AF;">(61) 3393-3233 • QR 209, Brasília-DF</div></div>
+  </div>
+  <button class="btn-primary" onclick="showToast('Brilho aumentado! 💡','💡')">💡 Aumentar brilho da tela</button>`;
+}
+
+function renderConfig(){
+  return `
+  <div class="sec-title">⚙️ Minha conta</div>
+  <div class="wcard">
+    <div style="font-size:13px;font-weight:800;margin-bottom:4px;">${U.name||''}</div>
+    <div style="font-size:12px;color:#9CA3AF;">${U.card_number||''}</div>
+    <div style="font-size:12px;color:#9CA3AF;margin-top:2px;">Membro desde ${U.member_since||''}</div>
+  </div>
+  <div class="wcard">
+    <div class="sec-title" style="margin-bottom:12px;">🔐 Alterar senha</div>
+    <label class="flbl">Senha atual</label>
+    <input class="finput" id="pw-old" type="password" placeholder="Sua senha atual"/>
+    <label class="flbl">Nova senha</label>
+    <input class="finput" id="pw-new" type="password" placeholder="Mínimo 6 caracteres"/>
+    <label class="flbl">Confirmar nova senha</label>
+    <input class="finput" id="pw-conf" type="password" placeholder="Repita a nova senha"/>
+    <div class="ferror" id="pw-err"></div>
+    <button class="btn-dark" onclick="changePw()">🔐 Alterar senha</button>
+  </div>
+  <button class="btn-danger" onclick="logout()">← Sair da conta</button>`;
+}
+
+async function changePw(){
+  const old  = document.getElementById('pw-old').value;
+  const nw   = document.getElementById('pw-new').value;
+  const conf = document.getElementById('pw-conf').value;
+  const err  = document.getElementById('pw-err');
+  err.classList.remove('show');
+  if(nw !== conf){ err.textContent='As senhas não coincidem.'; err.classList.add('show'); return; }
+  if(nw.length < 6){ err.textContent='Nova senha muito curta.'; err.classList.add('show'); return; }
+  const res = await api('/api/change_password','POST',{current:old,new:nw});
+  if(res && res.ok) showToast('Senha alterada com sucesso!','🔐');
+  else { err.textContent = res?.msg || 'Erro ao alterar.'; err.classList.add('show'); }
+}
+
+function render(){
+  document.getElementById('nav-area').innerHTML=`
+  <div class="bottom-nav">
+    ${tabs.map(t=>`<button class="bnav ${tab===t.id?'active':''}" onclick="tab='${t.id}';render()"><span class="bi">${t.icon}</span>${t.lbl}</button>`).join('')}
+  </div>`;
+  let html='';
+  if(tab==='card')   html=renderCard();
+  if(tab==='promos') html=renderPromos();
+  if(tab==='pontos') html=renderPontos();
+  if(tab==='qr')     html=renderQR();
+  if(tab==='config') html=renderConfig();
+  document.getElementById('content-area').innerHTML=html;
+}
+
+loadData();
+</script>
+{% endblock %}
