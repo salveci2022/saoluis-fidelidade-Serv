@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#0D1B3E">
+<title>Recuperar Senha • {{ store.name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nunito',sans-serif;background:#F0F4FF;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+.wrap{width:100%;max-width:400px;}
+.logo{text-align:center;margin-bottom:24px;}
+.logo-s{font-family:'Russo One',sans-serif;font-size:48px;color:#DC1E28;line-height:1;}
+.logo-name{font-family:'Russo One',sans-serif;font-size:26px;color:#1A52C8;letter-spacing:2px;}
+.logo-tag{font-size:13px;color:#9CA3AF;font-style:italic;margin-top:4px;}
+.card{background:white;border-radius:20px;padding:28px 24px;box-shadow:0 4px 24px rgba(0,0,0,.08);}
+.card-title{font-size:20px;font-weight:900;color:#0D1B3E;margin-bottom:6px;text-align:center;}
+.card-sub{font-size:14px;color:#9CA3AF;text-align:center;margin-bottom:24px;line-height:1.5;}
+
+/* STEPS */
+.steps{display:flex;justify-content:center;gap:8px;margin-bottom:24px;}
+.step-dot{width:10px;height:10px;border-radius:50%;background:#E5E7EB;transition:background .3s;}
+.step-dot.active{background:#1A52C8;}
+.step-dot.done{background:#00C48C;}
+
+/* FIELDS */
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:12px;font-weight:800;color:#6B7280;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;}
+.field input{
+  width:100%;padding:14px 16px;
+  border:2px solid #E5E7EB;border-radius:12px;
+  font-family:'Nunito',sans-serif;font-size:16px;
+  color:#0D1B3E;background:#FAFAFA;outline:none;
+  transition:border .2s;
+}
+.field input:focus{border-color:#1A52C8;background:white;}
+.field input.error{border-color:#DC1E28;background:#FEF2F2;}
+.field input.success{border-color:#00C48C;background:#F0FDF4;}
+
+/* CODE INPUT */
+.code-input{
+  font-family:monospace;font-size:28px;font-weight:900;
+  text-align:center;letter-spacing:8px;
+}
+
+/* BUTTONS */
+.btn-primary{
+  width:100%;padding:16px;border:none;border-radius:14px;
+  background:linear-gradient(90deg,#1A52C8,#DC1E28);
+  color:white;font-family:'Nunito',sans-serif;
+  font-size:16px;font-weight:900;cursor:pointer;
+  transition:opacity .15s;margin-bottom:10px;
+}
+.btn-primary:active{opacity:.85;}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-back{
+  width:100%;padding:13px;border:2px solid #E5E7EB;
+  border-radius:12px;background:transparent;
+  font-family:'Nunito',sans-serif;font-size:14px;
+  font-weight:800;color:#9CA3AF;cursor:pointer;
+}
+
+/* MESSAGES */
+.msg{padding:12px 16px;border-radius:10px;font-size:14px;font-weight:700;text-align:center;margin-bottom:14px;display:none;}
+.msg.show{display:block;}
+.msg.err{background:#FEF2F2;color:#DC1E28;border:1px solid #FCA5A5;}
+.msg.ok{background:#F0FDF4;color:#085041;border:1px solid #9FE1CB;}
+
+/* SUCCESS SCREEN */
+.success-screen{display:none;text-align:center;padding:20px 0;}
+.success-screen.show{display:block;}
+.success-icon{font-size:64px;margin-bottom:16px;}
+.success-title{font-size:22px;font-weight:900;color:#0D1B3E;margin-bottom:8px;}
+.success-sub{font-size:14px;color:#6B7280;margin-bottom:24px;}
+
+/* LOADING */
+.loading{display:none;}
+.loading.show{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;margin-bottom:8px;}
+.spinner{width:18px;height:18px;border:3px solid rgba(26,82,200,.2);border-top-color:#1A52C8;border-radius:50%;animation:spin .7s linear infinite;}
+.loading-txt{font-size:14px;color:#6B7280;font-weight:700;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* TIMER */
+.timer{text-align:center;font-size:13px;color:#9CA3AF;margin-top:8px;}
+.timer span{font-weight:900;color:#1A52C8;}
+.resend-btn{background:none;border:none;color:#1A52C8;font-family:'Nunito',sans-serif;font-size:13px;font-weight:900;cursor:pointer;text-decoration:underline;display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-s">S</div>
+    <div class="logo-name">ÃO LUIS</div>
+    <div class="logo-tag">{{ store.slogan }}</div>
+  </div>
+
+  <div class="card">
+
+    <!-- STEPS -->
+    <div class="steps">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+    </div>
+
+    <!-- STEP 1: PHONE -->
+    <div id="step1">
+      <div class="card-title">Recuperar Senha</div>
+      <div class="card-sub">Digite o WhatsApp que você usou para se cadastrar. Enviaremos um código.</div>
+      <div class="msg" id="msg1"></div>
+      <div class="field">
+        <label>Seu WhatsApp (com DDD)</label>
+        <input type="tel" id="phone" placeholder="(61) 9XXXX-XXXX" inputmode="numeric"/>
+      </div>
+      <div class="loading" id="load1"><div class="spinner"></div><div class="loading-txt">Enviando código...</div></div>
+      <button class="btn-primary" onclick="enviarCodigo()">📱 Enviar código pelo WhatsApp</button>
+      <button class="btn-back" onclick="window.location.href='/login'">← Voltar ao login</button>
+    </div>
+
+    <!-- STEP 2: CODE -->
+    <div id="step2" style="display:none;">
+      <div class="card-title">Digite o Código</div>
+      <div class="card-sub">Enviamos um código de 6 dígitos para o seu WhatsApp. Válido por 10 minutos.</div>
+      <div class="msg" id="msg2"></div>
+      <div class="field">
+        <label>Código de verificação</label>
+        <input type="text" id="code" class="code-input" placeholder="000000" inputmode="numeric" maxlength="6"/>
+      </div>
+      <div class="loading" id="load2"><div class="spinner"></div><div class="loading-txt">Verificando...</div></div>
+      <button class="btn-primary" onclick="verificarCodigo()">✅ Verificar código</button>
+      <div class="timer">Reenviar em <span id="timer-count">60</span>s &nbsp; <button class="resend-btn" id="resend-btn" onclick="reenviar()">Reenviar agora</button></div>
+      <button class="btn-back" onclick="voltarStep1()">← Voltar</button>
+    </div>
+
+    <!-- STEP 3: NEW PASSWORD -->
+    <div id="step3" style="display:none;">
+      <div class="card-title">Nova Senha</div>
+      <div class="card-sub">Código verificado! Agora escolha uma nova senha.</div>
+      <div class="msg" id="msg3"></div>
+      <div class="field">
+        <label>Nova senha (mínimo 6 caracteres)</label>
+        <input type="password" id="nova" placeholder="••••••••"/>
+      </div>
+      <div class="field">
+        <label>Confirmar nova senha</label>
+        <input type="password" id="confirmar" placeholder="••••••••"/>
+      </div>
+      <div class="loading" id="load3"><div class="spinner"></div><div class="loading-txt">Salvando...</div></div>
+      <button class="btn-primary" onclick="salvarSenha()">🔐 Salvar nova senha</button>
+      <button class="btn-back" onclick="voltarStep2()">← Voltar</button>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-screen" id="success">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">Senha alterada!</div>
+      <div class="success-sub">Sua nova senha está ativa. Faça login para continuar.</div>
+      <button class="btn-primary" onclick="window.location.href='/login'">Ir para o login →</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var phoneVal = '';
+var codeVal = '';
+var timerInterval = null;
+
+function showMsg(id, text, type){
+  var el=document.getElementById(id);
+  el.textContent=text;
+  el.className='msg show '+(type||'err');
+}
+function hideMsg(id){ document.getElementById(id).classList.remove('show'); }
+function setLoad(id,show){ document.getElementById(id).classList.toggle('show',show); }
+
+async function enviarCodigo(){
+  hideMsg('msg1');
+  var phone = document.getElementById('phone').value.replace(/\D/g,'');
+  if(!phone || phone.length < 10){
+    showMsg('msg1','Digite o WhatsApp com DDD (ex: 61 9XXXX-XXXX)','err');
+    document.getElementById('phone').classList.add('error');
+    return;
+  }
+  phoneVal = phone;
+  setLoad('load1',true);
+  try{
+    var res = await fetch('/api/recuperar/solicitar',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:phoneVal})
+    });
+    var data = await res.json();
+    setLoad('load1',false);
+    if(data.ok){
+      document.getElementById('step1').style.display='none';
+      document.getElementById('step2').style.display='block';
+      document.getElementById('dot1').classList.remove('active');
+      document.getElementById('dot1').classList.add('done');
+      document.getElementById('dot2').classList.add('active');
+      startTimer();
+    } else {
+      showMsg('msg1', data.msg||'Erro ao enviar. Tente novamente.','err');
+    }
+  } catch(e){
+    setLoad('load1',false);
+    showMsg('msg1','Sem conexao. Verifique a internet.','err');
+  }
+}
+
+function startTimer(){
+  var count = 60;
+  var timerEl = document.getElementById('timer-count');
+  var resendBtn = document.getElementById('resend-btn');
+  timerEl.textContent = count;
+  resendBtn.style.display='none';
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(()=>{
+    count--;
+    timerEl.textContent = count;
+    if(count <= 0){
+      clearInterval(timerInterval);
+      timerEl.parentElement.style.display='none';
+      resendBtn.style.display='inline';
+    }
+  },1000);
+}
+
+async function reenviar(){
+  document.getElementById('resend-btn').style.display='none';
+  document.getElementById('timer-count').parentElement.style.display='block';
+  await enviarCodigo();
+}
+
+async function verificarCodigo(){
+  hideMsg('msg2');
+  var code = document.getElementById('code').value.trim();
+  if(code.length !== 6 || !/^\d+$/.test(code)){
+    showMsg('msg2','O codigo tem 6 numeros. Verifique o WhatsApp.','err');
+    return;
+  }
+  codeVal = code;
+  setLoad('load2',true);
+  try{
+    var res = await fetch('/api/recuperar/verificar',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:phoneVal,code:codeVal,nova_senha:'__CHECK__'})
+    });
+    var data = await res.json();
+    setLoad('load2',false);
+    // If wrong code show error, if valid code proceed
+    if(data.ok || data.msg.includes('Preencha')){
+      // Code accepted or just missing password — go to step 3
+      document.getElementById('step2').style.display='none';
+      document.getElementById('step3').style.display='block';
+      document.getElementById('dot2').classList.remove('active');
+      document.getElementById('dot2').classList.add('done');
+      document.getElementById('dot3').classList.add('active');
+      if(timerInterval) clearInterval(timerInterval);
+    } else {
+      showMsg('msg2', data.msg||'Codigo incorreto.','err');
+      document.getElementById('code').classList.add('error');
+    }
+  } catch(e){
+    setLoad('load2',false);
+    showMsg('msg2','Sem conexao. Tente novamente.','err');
+  }
+}
+
+async function salvarSenha(){
+  hideMsg('msg3');
+  var nova = document.getElementById('nova').value;
+  var conf = document.getElementById('confirmar').value;
+  if(nova.length < 6){
+    showMsg('msg3','A senha precisa ter pelo menos 6 caracteres.','err');
+    return;
+  }
+  if(nova !== conf){
+    showMsg('msg3','As senhas nao coincidem.','err');
+    document.getElementById('confirmar').classList.add('error');
+    return;
+  }
+  setLoad('load3',true);
+  try{
+    var res = await fetch('/api/recuperar/verificar',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:phoneVal,code:codeVal,nova_senha:nova})
+    });
+    var data = await res.json();
+    setLoad('load3',false);
+    if(data.ok){
+      document.getElementById('step3').style.display='none';
+      document.getElementById('success').classList.add('show');
+      document.getElementById('dot3').classList.remove('active');
+      document.getElementById('dot3').classList.add('done');
+    } else {
+      showMsg('msg3', data.msg||'Erro ao salvar. Tente novamente.','err');
+    }
+  } catch(e){
+    setLoad('load3',false);
+    showMsg('msg3','Sem conexao. Tente novamente.','err');
+  }
+}
+
+function voltarStep1(){
+  document.getElementById('step2').style.display='none';
+  document.getElementById('step1').style.display='block';
+  document.getElementById('dot2').classList.remove('active');
+  document.getElementById('dot1').classList.remove('done');
+  document.getElementById('dot1').classList.add('active');
+  if(timerInterval) clearInterval(timerInterval);
+}
+function voltarStep2(){
+  document.getElementById('step3').style.display='none';
+  document.getElementById('step2').style.display='block';
+  document.getElementById('dot3').classList.remove('active');
+  document.getElementById('dot2').classList.remove('done');
+  document.getElementById('dot2').classList.add('active');
+}
+
+// Phone formatting
+document.getElementById('phone').addEventListener('input', function(){
+  this.classList.remove('error');
+  hideMsg('msg1');
+});
+document.getElementById('code').addEventListener('input', function(){
+  this.classList.remove('error');
+  hideMsg('msg2');
+  if(this.value.length === 6) verificarCodigo();
+});
+</script>
+</body>
+</html>

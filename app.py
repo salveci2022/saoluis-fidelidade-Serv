@@ -980,3 +980,99 @@ def db_get_all_transactions_today(today):
 def _get_user_phone_from_tx(tx):
     u = db_get_user(tx.get('user_id',''))
     return u.get('phone','') if u else ''
+
+# ── RECUPERACAO DE SENHA ──────────────────────────────────────────────────────
+import random
+
+# In-memory store for reset codes (phone -> {code, expires, attempts})
+_reset_codes = {}
+
+@app.route('/recuperar-senha')
+def recuperar_senha_page():
+    store = db_get_store()
+    return render_template('recuperar_senha.html', store=store)
+
+@app.route('/api/recuperar/solicitar', methods=['POST'])
+@limiter.limit('3 per minute')
+def api_recuperar_solicitar():
+    data = request.json or {}
+    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+
+    if not phone or len(phone) < 8:
+        return jsonify({'ok':False,'msg':'Digite o WhatsApp cadastrado com DDD'}), 400
+
+    # Find user by phone
+    u = db_get_user_by_phone(phone)
+    if not u:
+        # Security: don't reveal if phone exists
+        return jsonify({'ok':True,'msg':'Se o numero estiver cadastrado, voce recebera o codigo em instantes.'})
+
+    if u.get('role') == 'owner':
+        return jsonify({'ok':False,'msg':'Para recuperar a senha do dono, entre em contato com o suporte.'}), 400
+
+    # Generate 6-digit code
+    code = str(random.randint(100000, 999999))
+    expires = datetime.now().timestamp() + 600  # 10 minutes
+
+    _reset_codes[phone] = {'code': code, 'expires': expires, 'attempts': 0, 'user_id': u['id']}
+
+    store = db_get_store()
+    msg = ('🔐 {} - Recuperacao de Senha\n'
+           'Seu codigo de verificacao:\n\n'
+           '  *{}*\n\n'
+           'Valido por 10 minutos.\n'
+           'Se nao foi voce, ignore esta mensagem.').format(store.get('name','Sao Luis'), code)
+
+    send_whatsapp(phone, msg)
+    db_audit('sistema', 'recuperar_senha_solicitado', u['id'], f'phone:{phone}', request.remote_addr)
+
+    return jsonify({'ok':True,'msg':'Codigo enviado! Verifique seu WhatsApp.'})
+
+@app.route('/api/recuperar/verificar', methods=['POST'])
+@limiter.limit('5 per minute')
+def api_recuperar_verificar():
+    data = request.json or {}
+    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+    code  = data.get('code','').strip()
+    nova  = data.get('nova_senha','')
+
+    if not phone or not code or not nova:
+        return jsonify({'ok':False,'msg':'Preencha todos os campos'}), 400
+
+    if len(nova) < 6:
+        return jsonify({'ok':False,'msg':'Senha muito curta — minimo 6 caracteres'}), 400
+
+    entry = _reset_codes.get(phone)
+    if not entry:
+        return jsonify({'ok':False,'msg':'Solicite um novo codigo'}), 400
+
+    if datetime.now().timestamp() > entry['expires']:
+        del _reset_codes[phone]
+        return jsonify({'ok':False,'msg':'Codigo expirado. Solicite um novo.'}), 400
+
+    entry['attempts'] += 1
+    if entry['attempts'] > 5:
+        del _reset_codes[phone]
+        return jsonify({'ok':False,'msg':'Muitas tentativas. Solicite um novo codigo.'}), 400
+
+    if entry['code'] != code:
+        return jsonify({'ok':False,'msg':f'Codigo incorreto. Tentativas restantes: {5 - entry["attempts"]}'}), 400
+
+    # Code valid — update password
+    u = db_get_user(entry['user_id'])
+    if not u:
+        return jsonify({'ok':False,'msg':'Usuario nao encontrado'}), 400
+
+    u['password'] = hash_pw(nova)
+    u['failed_attempts'] = 0
+    db_save_user(u)
+    del _reset_codes[phone]
+
+    store = db_get_store()
+    msg = ('✅ {} - Senha alterada com sucesso!\n'
+           'Sua nova senha esta ativa.\n'
+           'Se nao foi voce, entre em contato com o suporte.').format(store.get('name','Sao Luis'))
+    send_whatsapp(phone, msg)
+
+    db_audit('sistema', 'recuperar_senha_ok', u['id'], f'phone:{phone}', request.remote_addr)
+    return jsonify({'ok':True,'msg':'Senha alterada com sucesso! Faca login com a nova senha.'})
