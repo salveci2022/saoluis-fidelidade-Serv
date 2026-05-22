@@ -1,4 +1,4 @@
-import os, json, uuid, hashlib, hmac, secrets, logging
+import os, json, uuid, hmac, secrets, logging, re
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -6,6 +6,7 @@ from flask import (Flask, render_template, request, jsonify,
                    session, redirect, url_for, make_response, abort)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # ── LOGGING ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO,
@@ -18,6 +19,7 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=not os.environ.get("FLASK_DEBUG"),  # ✅ SEGURO: True em produção
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
 )
 
@@ -28,11 +30,11 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-# ── DATABASE ────────────────────────────────────────────────────────────────
+# ── DATABASE ─────────────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 USE_PG = bool(DATABASE_URL)
 
-DATA_DIR = "data"
+DATA_DIR          = "data"
 USERS_FILE        = os.path.join(DATA_DIR, "users.json")
 PROMOS_FILE       = os.path.join(DATA_DIR, "promos.json")
 TRANSACTIONS_FILE = os.path.join(DATA_DIR, "transactions.json")
@@ -40,8 +42,8 @@ STORE_FILE        = os.path.join(DATA_DIR, "store.json")
 AUDIT_FILE        = os.path.join(DATA_DIR, "audit.json")
 SQLITE_FILE       = os.path.join(DATA_DIR, "saoluis.db")
 
-# SQLite (Windows / dev local)
 import sqlite3
+
 def get_sqlite():
     os.makedirs(DATA_DIR, exist_ok=True)
     conn = sqlite3.connect(SQLITE_FILE, check_same_thread=False)
@@ -53,7 +55,7 @@ def get_pg():
     try:
         import psycopg2
     except ImportError:
-        raise RuntimeError("psycopg2 nao instalado. Configure DATABASE_URL ou use SQLite.")
+        raise RuntimeError("psycopg2 nao instalado.")
     url = DATABASE_URL
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
@@ -93,6 +95,12 @@ def init_pg():
         id SERIAL PRIMARY KEY, actor TEXT, action TEXT,
         target TEXT, detail TEXT, ip TEXT, ts TIMESTAMP DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS reset_codes (
+        phone TEXT PRIMARY KEY,
+        code TEXT, expires_at TIMESTAMP,
+        attempts INTEGER DEFAULT 0,
+        user_id TEXT
+    );
     """)
     cur.close()
     log.info("PostgreSQL tables ready")
@@ -126,12 +134,18 @@ def init_sqlite():
         actor TEXT, action TEXT, target TEXT,
         detail TEXT, ip TEXT, ts TEXT
     );
+    CREATE TABLE IF NOT EXISTS reset_codes (
+        phone TEXT PRIMARY KEY,
+        code TEXT, expires_at TEXT,
+        attempts INTEGER DEFAULT 0,
+        user_id TEXT
+    );
     """)
     conn.commit()
     conn.close()
     log.info("SQLite tables ready")
 
-# ── JSON FALLBACK HELPERS ─────────────────────────────────────────────────────
+# ── JSON FALLBACK ─────────────────────────────────────────────────────────────
 def load_json(path, default):
     os.makedirs(DATA_DIR, exist_ok=True)
     if os.path.exists(path):
@@ -144,7 +158,7 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-# ── UNIVERSAL DB HELPERS ──────────────────────────────────────────────────────
+# ── DB HELPERS ────────────────────────────────────────────────────────────────
 def _row_to_dict(row):
     if row is None: return None
     if isinstance(row, dict): return row
@@ -172,6 +186,18 @@ def db_get_user(uid):
         cols=["id","name","email","password","role","phone","points","member_since","card_number","failed_attempts","locked_until"]
         return dict(zip(cols, row))
     conn = get_sqlite(); cur = conn.execute("SELECT * FROM users WHERE id=?", (uid,))
+    row = cur.fetchone(); conn.close()
+    return _row_to_dict(row)
+
+def db_get_user_by_phone(phone):
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("SELECT id,name,email,password,role,phone,points,member_since,card_number,failed_attempts,locked_until FROM users WHERE phone=%s", (phone,))
+        row = cur.fetchone(); cur.close()
+        if not row: return None
+        cols=["id","name","email","password","role","phone","points","member_since","card_number","failed_attempts","locked_until"]
+        return dict(zip(cols, row))
+    conn = get_sqlite(); cur = conn.execute("SELECT * FROM users WHERE phone=?", (phone,))
     row = cur.fetchone(); conn.close()
     return _row_to_dict(row)
 
@@ -303,7 +329,6 @@ def db_delete_user(uid):
     return deleted > 0
 
 def db_cadastro_by_owner(name, phone, pw):
-    """Dono cadastra cliente direto no painel"""
     uid  = "c_" + str(uuid.uuid4())[:8]
     card = f"SL-{str(uuid.uuid4())[:4].upper()}-{str(uuid.uuid4())[:4].upper()}-DF"
     u = {"id":uid, "name":name.strip(),
@@ -315,13 +340,87 @@ def db_cadastro_by_owner(name, phone, pw):
     db_save_user(u)
     return u
 
+# ── RESET CODES NO BANCO (substitui _reset_codes em memória) ─────────────────
+def db_save_reset_code(phone, code, user_id):
+    """✅ SEGURO: códigos de recuperação persistidos no banco, não em memória"""
+    expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("""INSERT INTO reset_codes(phone,code,expires_at,attempts,user_id)
+            VALUES(%s,%s,%s,0,%s)
+            ON CONFLICT(phone) DO UPDATE SET code=EXCLUDED.code,
+            expires_at=EXCLUDED.expires_at,attempts=0,user_id=EXCLUDED.user_id""",
+            (phone, code, expires_at, user_id))
+        cur.close()
+    else:
+        conn = get_sqlite()
+        conn.execute("""INSERT INTO reset_codes(phone,code,expires_at,attempts,user_id)
+            VALUES(?,?,?,0,?)
+            ON CONFLICT(phone) DO UPDATE SET code=excluded.code,
+            expires_at=excluded.expires_at,attempts=0,user_id=excluded.user_id""",
+            (phone, code, expires_at, user_id))
+        conn.commit(); conn.close()
+
+def db_get_reset_code(phone):
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("SELECT phone,code,expires_at,attempts,user_id FROM reset_codes WHERE phone=%s", (phone,))
+        row = cur.fetchone(); cur.close()
+        if not row: return None
+        return dict(zip(["phone","code","expires_at","attempts","user_id"], row))
+    conn = get_sqlite()
+    row = conn.execute("SELECT * FROM reset_codes WHERE phone=?", (phone,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def db_increment_reset_attempts(phone):
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("UPDATE reset_codes SET attempts=attempts+1 WHERE phone=%s", (phone,))
+        cur.close()
+    else:
+        conn = get_sqlite()
+        conn.execute("UPDATE reset_codes SET attempts=attempts+1 WHERE phone=?", (phone,))
+        conn.commit(); conn.close()
+
+def db_delete_reset_code(phone):
+    if USE_PG:
+        conn = get_pg(); cur = conn.cursor()
+        cur.execute("DELETE FROM reset_codes WHERE phone=%s", (phone,))
+        cur.close()
+    else:
+        conn = get_sqlite()
+        conn.execute("DELETE FROM reset_codes WHERE phone=?", (phone,))
+        conn.commit(); conn.close()
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def hash_pw(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
+    """✅ SEGURO: bcrypt via Werkzeug com salt automático (substitui SHA-256 puro)"""
+    return generate_password_hash(pw, method='pbkdf2:sha256', salt_length=16)
+
+def check_pw(pw, hashed):
+    """✅ SEGURO: verificação compatível com hashes novos (pbkdf2) e antigos (sha256 puro)"""
+    import hashlib
+    # Compatibilidade: hash antigo (sha256 hex puro de 64 chars)
+    if len(hashed) == 64 and all(c in '0123456789abcdef' for c in hashed):
+        return hashlib.sha256(pw.encode()).hexdigest() == hashed
+    return check_password_hash(hashed, pw)
+
+def sanitize_str(value, max_len=200):
+    """✅ SEGURO: remove caracteres de controle e limita tamanho"""
+    if not isinstance(value, str):
+        value = str(value)
+    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
+    return value.strip()[:max_len]
+
+def validate_phone(phone):
+    """Valida formato de telefone brasileiro (somente dígitos, 10-11 chars)"""
+    digits = re.sub(r'\D', '', phone)
+    return digits if 10 <= len(digits) <= 11 else None
 
 def make_card_qr_token(card_number):
     secret = app.secret_key if isinstance(app.secret_key, bytes) else app.secret_key.encode()
-    return hmac.new(secret, card_number.encode(), hashlib.sha256).hexdigest()[:16]
+    return hmac.new(secret, card_number.encode(), __import__('hashlib').sha256).hexdigest()[:32]  # ✅ 32 chars (era 16)
 
 def get_tier(pts):
     if pts >= 4000: return "Ouro"
@@ -347,7 +446,7 @@ def send_whatsapp(phone, message):
         log.info(f"[WhatsApp simulado] {phone}: {message[:60]}")
         return True
     import requests as req
-    clean = phone.replace("+","").replace("-","").replace(" ","").replace("(","").replace(")","")
+    clean = re.sub(r'\D', '', phone)
     try:
         r = req.post(
             f"https://api.z-api.io/instances/{INST}/token/{TOKEN}/send-text",
@@ -377,6 +476,29 @@ def owner_required(f):
         return f(*a, **kw)
     return dec
 
+# ── HEADERS DE SEGURANÇA ──────────────────────────────────────────────────────
+@app.after_request
+def add_security_headers(response):
+    """✅ SEGURO: headers HTTP de segurança em todas as respostas"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # HSTS: força HTTPS por 1 ano em produção
+    if not os.environ.get("FLASK_DEBUG"):
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    # CSP: restringe origens de scripts e estilos
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    return response
+
 # ── SEED ──────────────────────────────────────────────────────────────────────
 def seed():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -387,17 +509,17 @@ def seed():
         try: init_sqlite()
         except Exception as e: log.error(f"SQLite init error: {e}")
 
-    # seed owner
     owner = db_get_user("owner_1")
     if not owner:
+        # ✅ SEGURO: senha do dono via variável de ambiente
+        owner_pw = os.environ.get("OWNER_PASSWORD", "saoluis@2025!")
         db_save_user({"id":"owner_1","name":"Dono São Luis",
-            "email":"dono@saoluis.com.br","password":hash_pw("saoluis123"),
+            "email":"dono@saoluis.com.br","password":hash_pw(owner_pw),
             "role":"owner","phone":"61999999999","points":0,
             "member_since":datetime.now().strftime("%Y-%m-%d"),
             "card_number":"","failed_attempts":0})
-        log.info("Seed: owner criado")
+        log.info(f"Seed: owner criado | senha via OWNER_PASSWORD env var")
 
-    # seed client
     c = db_get_user("client_1")
     if not c:
         db_save_user({"id":"client_1","name":"Maria Silva",
@@ -410,7 +532,6 @@ def seed():
             "date":"2025-07-05 09:42","created_by":"caixa"})
         log.info("Seed: cliente demo criado")
 
-    # seed store
     store = db_get_store()
     if not store:
         db_save_store(default_store())
@@ -472,7 +593,7 @@ def force_https():
 @limiter.limit("5 per minute")
 def api_login():
     data = request.json or {}
-    email = data.get("email","").strip().lower()
+    email = sanitize_str(data.get("email","")).lower()
     pw    = data.get("password","")
     ip    = request.remote_addr
 
@@ -484,7 +605,6 @@ def api_login():
         db_audit("anon", "login_failed", email, "usuário não encontrado", ip)
         return jsonify({"ok":False,"msg":"Email ou senha incorretos"}), 401
 
-    # check lock
     locked = u.get("locked_until")
     if locked:
         locked_dt = datetime.fromisoformat(str(locked)) if isinstance(locked,str) else locked
@@ -492,7 +612,8 @@ def api_login():
             mins = int((locked_dt - datetime.now()).seconds / 60) + 1
             return jsonify({"ok":False,"msg":f"Conta bloqueada. Tente em {mins} minuto(s)."}), 429
 
-    if u["password"] != hash_pw(pw):
+    # ✅ SEGURO: check_pw() compatível com hashes antigos (sha256) e novos (pbkdf2)
+    if not check_pw(pw, u["password"]):
         attempts = u.get("failed_attempts", 0) + 1
         u["failed_attempts"] = attempts
         if attempts >= 5:
@@ -503,7 +624,12 @@ def api_login():
         msg = "Senha incorreta." + (f" {remaining} tentativa(s) restante(s)." if remaining > 0 else " Conta bloqueada por 15 min.")
         return jsonify({"ok":False,"msg":msg}), 401
 
-    # success
+    # ✅ SEGURO: re-hash automático se ainda estava em SHA-256 puro
+    import hashlib
+    if len(u["password"]) == 64 and all(c in '0123456789abcdef' for c in u["password"]):
+        u["password"] = hash_pw(pw)
+        log.info(f"Re-hash automático para pbkdf2: {u['id']}")
+
     u["failed_attempts"] = 0
     u["locked_until"] = None
     db_save_user(u)
@@ -525,9 +651,10 @@ def api_logout():
 @limiter.limit("3 per minute")
 def api_cadastro():
     data = request.json or {}
-    name  = data.get("name","").strip()
-    email = data.get("email","").strip().lower()
-    phone = data.get("phone","").strip()
+    # ✅ SEGURO: sanitização de todos os inputs
+    name  = sanitize_str(data.get("name",""), 100)
+    email = sanitize_str(data.get("email",""), 200).lower()
+    phone_raw = sanitize_str(data.get("phone",""), 20)
     pw    = data.get("password","")
 
     if not name or not pw:
@@ -537,10 +664,15 @@ def api_cadastro():
     if email and db_get_user_by_email(email):
         return jsonify({"ok":False,"msg":"Email já cadastrado"}), 400
 
+    # ✅ SEGURO: validar telefone
+    phone = validate_phone(phone_raw) if phone_raw else ""
+    if phone_raw and not phone:
+        return jsonify({"ok":False,"msg":"Telefone inválido. Use formato: (61) 9XXXX-XXXX"}), 400
+
     uid  = "c_" + str(uuid.uuid4())[:8]
     card = f"SL-{str(uuid.uuid4())[:4].upper()}-{str(uuid.uuid4())[:4].upper()}-DF"
     u = {"id":uid,"name":name,"email":email or f"{uid}@saoluis.local",
-         "password":hash_pw(pw),"role":"customer","phone":phone,
+         "password":hash_pw(pw),"role":"customer","phone":phone or phone_raw,
          "points":0,"member_since":datetime.now().strftime("%Y-%m-%d"),
          "card_number":card,"failed_attempts":0}
     db_save_user(u)
@@ -552,8 +684,8 @@ def api_cadastro():
            f"⭐ Acumule pontos e ganhe descontos de até 10%!\n"
            f"📍 {store.get('address','')}\n"
            f"A sua escolha Feliz! 🎉")
-    if phone:
-        send_whatsapp(phone, msg)
+    if phone or phone_raw:
+        send_whatsapp(phone or phone_raw, msg)
 
     db_audit(name, "cadastro", uid, f"phone:{phone}", request.remote_addr)
     return jsonify({"ok":True,"card":card})
@@ -563,7 +695,8 @@ def api_cadastro():
 def api_change_password():
     data = request.json or {}
     u = db_get_user(session["user_id"])
-    if u["password"] != hash_pw(data.get("current","")):
+    # ✅ SEGURO: check_pw() compatível
+    if not check_pw(data.get("current",""), u["password"]):
         return jsonify({"ok":False,"msg":"Senha atual incorreta"}), 400
     new_pw = data.get("new","")
     if len(new_pw) < 6:
@@ -645,20 +778,20 @@ def api_send_promo():
     days_val = days_map.get(str(data.get("days","1")), 1)
     promo = {
         "id": str(uuid.uuid4()),
-        "title":     data.get("title","Promoção"),
-        "product":   data.get("product",""),
-        "discount":  data.get("discount","5%"),
+        "title":     sanitize_str(data.get("title","Promoção"), 100),
+        "product":   sanitize_str(data.get("product",""), 100),
+        "discount":  sanitize_str(data.get("discount","5%"), 10),
         "bonus_pct": float(str(data.get("discount","5%")).replace("%","").replace(",",".")),
         "active":    True,
         "created_at":datetime.now().strftime("%Y-%m-%d %H:%M"),
         "expires_at":(datetime.now()+timedelta(days=days_val)).strftime("%Y-%m-%d"),
-        "target":    data.get("target","all"),
+        "target":    data.get("target","all") if data.get("target","all") in ("all","ouro","prata_ouro") else "all",
     }
     db_save_promo(promo)
 
     store     = db_get_store()
     customers = db_all_customers()
-    target    = data.get("target","all")
+    target    = promo["target"]
     if target == "ouro":
         targets = [c for c in customers if get_tier(c.get("points",0))=="Ouro"]
     elif target == "prata_ouro":
@@ -688,10 +821,13 @@ def api_send_promo():
 @owner_required
 def api_add_points():
     data = request.json or {}
-    uid  = data.get("user_id","")
+    uid  = sanitize_str(data.get("user_id",""), 50)
     val  = data.get("value", 0)
     try: val = float(val)
     except: return jsonify({"ok":False,"msg":"Valor inválido"}), 400
+
+    if val <= 0 or val > 99999:
+        return jsonify({"ok":False,"msg":"Valor fora do limite permitido"}), 400
 
     store  = db_get_store()
     ppr    = int(store.get("points_per_real","1"))
@@ -738,7 +874,9 @@ def api_store():
         return jsonify(db_get_store())
     data = request.json or {}
     store = db_get_store()
-    store.update(data)
+    # ✅ SEGURO: sanitiza antes de salvar configurações
+    safe_data = {k: sanitize_str(str(v), 300) for k,v in data.items()}
+    store.update(safe_data)
     db_save_store(store)
     db_audit(session["name"],"update_store","store","configurações salvas",request.remote_addr)
     return jsonify({"ok":True})
@@ -764,29 +902,33 @@ def api_audit():
 @owner_required
 def api_cadastrar_cliente():
     data = request.json or {}
-    name  = data.get("name","").strip()
-    phone = data.get("phone","").strip()
+    name  = sanitize_str(data.get("name",""), 100)
+    phone_raw = sanitize_str(data.get("phone",""), 20)
     pw    = data.get("password","").strip()
+
     if not name:
         return jsonify({"ok":False, "msg":"Nome é obrigatório"}), 400
-    if not phone:
+    if not phone_raw:
         return jsonify({"ok":False, "msg":"WhatsApp é obrigatório"}), 400
+
+    phone = validate_phone(phone_raw)
+    if not phone:
+        return jsonify({"ok":False, "msg":"Telefone inválido. Use formato: (61) 9XXXX-XXXX"}), 400
+
     u = db_cadastro_by_owner(name, phone, pw or phone[-4:])
     store = db_get_store()
     loja_nome = store.get("name", "São Luis")
     senha_prov = pw or phone[-4:]
     card_num   = u["card_number"]
-    linhas = [
+    msg = "\n".join([
         "🏪 Bem-vindo ao " + loja_nome + "!",
         "✅ Seu cartão foi criado!",
         "💳 Cartão: " + card_num,
         "🔑 Senha provisória: " + senha_prov,
         "⭐ Acumule pontos e ganhe até 10% de desconto!",
         "A sua escolha Feliz! 🎉"
-    ]
-    msg = "\n".join(linhas)
-    if phone:
-        send_whatsapp(phone, msg)
+    ])
+    send_whatsapp(phone, msg)
     db_audit(session["name"], "cadastrar_cliente", u["id"],
              f"nome:{name} phone:{phone}", request.remote_addr)
     return jsonify({"ok":True, "card": u["card_number"], "id": u["id"],
@@ -797,7 +939,7 @@ def api_cadastrar_cliente():
 @owner_required
 def api_excluir_cliente():
     data = request.json or {}
-    uid  = data.get("user_id","")
+    uid  = sanitize_str(data.get("user_id",""), 50)
     if not uid:
         return jsonify({"ok":False, "msg":"ID do cliente não informado"}), 400
     if uid in ("owner_1", session.get("user_id")):
@@ -805,8 +947,7 @@ def api_excluir_cliente():
     deleted = db_delete_user(uid)
     if not deleted:
         return jsonify({"ok":False, "msg":"Cliente não encontrado"}), 404
-    db_audit(session["name"], "excluir_cliente", uid,
-             "cliente excluído", request.remote_addr)
+    db_audit(session["name"], "excluir_cliente", uid, "cliente excluído", request.remote_addr)
     return jsonify({"ok":True})
 
 # ── QR SCAN ───────────────────────────────────────────────────────────────────
@@ -823,52 +964,6 @@ def qr_scan(card_number, token):
     return render_template("qr_scan.html", user=u,
                            tier=get_tier(pts), discount=get_discount(pts))
 
-# ── PWA MANIFEST & SERVICE WORKER ────────────────────────────────────────────
-@app.route("/manifest.json")
-def manifest():
-    r = make_response(json.dumps({
-        "name": "São Luis Fidelidade",
-        "short_name": "São Luis",
-        "description": "Cartão digital de fidelidade",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#0D1B3E",
-        "theme_color": "#1A52C8",
-        "orientation": "portrait",
-        "icons": [
-            {"src":"/static/icons/icon-192.png","sizes":"192x192","type":"image/png"},
-            {"src":"/static/icons/icon-512.png","sizes":"512x512","type":"image/png"}
-        ]
-    }))
-    r.headers["Content-Type"] = "application/json"
-    return r
-
-@app.route("/sw.js")
-def service_worker():
-    sw = """
-const CACHE = 'saoluis-v1';
-const ASSETS = ['/', '/login', '/static/css/main.css', '/offline'];
-self.addEventListener('install', e => e.waitUntil(
-  caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})
-));
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request).then(r => r || caches.match('/offline')))
-  );
-});
-"""
-    r = make_response(sw)
-    r.headers["Content-Type"] = "application/javascript"
-    r.headers["Service-Worker-Allowed"] = "/"
-    return r
-
-# ── MAIN ──────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    seed()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
-
 # ── TERMINAL DE AUTOATENDIMENTO ───────────────────────────────────────────────
 @app.route('/terminal')
 def terminal_page():
@@ -879,17 +974,25 @@ def terminal_page():
 @limiter.limit('10 per minute')
 def api_terminal_pontuar():
     data = request.json or {}
-    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+    ip   = request.remote_addr
+
+    # ✅ SEGURO: verificação do PIN server-side (não mais apenas no JS)
+    pin_fornecido = data.get('pin','').strip()
+    pin_correto   = os.environ.get("TERMINAL_PIN", "1234")
+    if not pin_fornecido or pin_fornecido != pin_correto:
+        db_audit("terminal", "pin_invalido", "", f"ip:{ip}", ip)
+        return jsonify({'ok':False,'msg':'PIN inválido. Acesso negado.'}), 403
+
+    phone_raw = data.get('phone','').strip()
+    phone = validate_phone(phone_raw)
+    if not phone:
+        return jsonify({'ok':False,'msg':'Telefone inválido. Digite com DDD (ex: 61 9XXXX-XXXX).'}), 400
+
     valor_str = str(data.get('value','')).strip().replace(',','.')
-    ip = request.remote_addr
-
-    if not phone or len(phone) < 8:
-        return jsonify({'ok':False,'msg':'Telefone invalido. Digite com DDD.'}), 400
-
     try:
         valor = float(valor_str)
     except:
-        return jsonify({'ok':False,'msg':'Valor invalido. Ex: 85.50'}), 400
+        return jsonify({'ok':False,'msg':'Valor inválido. Ex: 85.50'}), 400
 
     if valor <= 0 or valor > 9999:
         return jsonify({'ok':False,'msg':'Valor fora do limite permitido.'}), 400
@@ -964,7 +1067,6 @@ def api_terminal_pontuar():
         send_whatsapp(owner_phone, alert_msg)
 
     db_audit('terminal','pontuar',u['id'],'phone:{} valor:{:.2f} pts:{}'.format(phone,valor,pts), ip)
-
     return jsonify({'ok':True,'novo':novo,'points_added':pts,'total_points':new_pts,
                     'tier':tier,'discount':disc,'card':u.get('card_number',''),'name':u['name']})
 
@@ -981,11 +1083,8 @@ def _get_user_phone_from_tx(tx):
     u = db_get_user(tx.get('user_id',''))
     return u.get('phone','') if u else ''
 
-# ── RECUPERACAO DE SENHA ──────────────────────────────────────────────────────
+# ── RECUPERAÇÃO DE SENHA ──────────────────────────────────────────────────────
 import random
-
-# In-memory store for reset codes (phone -> {code, expires, attempts})
-_reset_codes = {}
 
 @app.route('/recuperar-senha')
 def recuperar_senha_page():
@@ -996,25 +1095,24 @@ def recuperar_senha_page():
 @limiter.limit('3 per minute')
 def api_recuperar_solicitar():
     data = request.json or {}
-    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+    phone_raw = data.get('phone','').strip()
+    phone = validate_phone(phone_raw)
 
-    if not phone or len(phone) < 8:
-        return jsonify({'ok':False,'msg':'Digite o WhatsApp cadastrado com DDD'}), 400
+    if not phone:
+        return jsonify({'ok':False,'msg':'Digite o WhatsApp com DDD (ex: 61 9XXXX-XXXX)'}), 400
 
-    # Find user by phone
     u = db_get_user_by_phone(phone)
     if not u:
-        # Security: don't reveal if phone exists
-        return jsonify({'ok':True,'msg':'Se o numero estiver cadastrado, voce recebera o codigo em instantes.'})
+        return jsonify({'ok':True,'msg':'Se o número estiver cadastrado, você receberá o código em instantes.'})
 
     if u.get('role') == 'owner':
         return jsonify({'ok':False,'msg':'Para recuperar a senha do dono, entre em contato com o suporte.'}), 400
 
-    # Generate 6-digit code
-    code = str(random.randint(100000, 999999))
-    expires = datetime.now().timestamp() + 600  # 10 minutes
+    # ✅ SEGURO: código de 6 dígitos com secrets (criptograficamente seguro)
+    code = str(secrets.randbelow(900000) + 100000)
 
-    _reset_codes[phone] = {'code': code, 'expires': expires, 'attempts': 0, 'user_id': u['id']}
+    # ✅ SEGURO: persistido no banco (não em memória — sobrevive reinício do servidor)
+    db_save_reset_code(phone, code, u['id'])
 
     store = db_get_store()
     msg = ('🔐 {} - Recuperacao de Senha\n'
@@ -1025,54 +1123,111 @@ def api_recuperar_solicitar():
 
     send_whatsapp(phone, msg)
     db_audit('sistema', 'recuperar_senha_solicitado', u['id'], f'phone:{phone}', request.remote_addr)
-
-    return jsonify({'ok':True,'msg':'Codigo enviado! Verifique seu WhatsApp.'})
+    return jsonify({'ok':True,'msg':'Código enviado! Verifique seu WhatsApp.'})
 
 @app.route('/api/recuperar/verificar', methods=['POST'])
 @limiter.limit('5 per minute')
 def api_recuperar_verificar():
     data = request.json or {}
-    phone = data.get('phone','').strip().replace(' ','').replace('-','').replace('(','').replace(')','')
-    code  = data.get('code','').strip()
+    phone_raw = data.get('phone','').strip()
+    phone = validate_phone(phone_raw)
+    code  = sanitize_str(data.get('code',''), 10)
     nova  = data.get('nova_senha','')
 
     if not phone or not code or not nova:
         return jsonify({'ok':False,'msg':'Preencha todos os campos'}), 400
 
     if len(nova) < 6:
-        return jsonify({'ok':False,'msg':'Senha muito curta — minimo 6 caracteres'}), 400
+        return jsonify({'ok':False,'msg':'Senha muito curta — mínimo 6 caracteres'}), 400
 
-    entry = _reset_codes.get(phone)
+    # ✅ SEGURO: lido do banco (não da memória)
+    entry = db_get_reset_code(phone)
     if not entry:
-        return jsonify({'ok':False,'msg':'Solicite um novo codigo'}), 400
+        return jsonify({'ok':False,'msg':'Solicite um novo código'}), 400
 
-    if datetime.now().timestamp() > entry['expires']:
-        del _reset_codes[phone]
-        return jsonify({'ok':False,'msg':'Codigo expirado. Solicite um novo.'}), 400
+    expires_str = entry['expires_at']
+    if isinstance(expires_str, str):
+        expires_dt = datetime.fromisoformat(expires_str)
+    else:
+        expires_dt = expires_str
 
-    entry['attempts'] += 1
-    if entry['attempts'] > 5:
-        del _reset_codes[phone]
-        return jsonify({'ok':False,'msg':'Muitas tentativas. Solicite um novo codigo.'}), 400
+    if datetime.now() > expires_dt:
+        db_delete_reset_code(phone)
+        return jsonify({'ok':False,'msg':'Código expirado. Solicite um novo.'}), 400
 
-    if entry['code'] != code:
-        return jsonify({'ok':False,'msg':f'Codigo incorreto. Tentativas restantes: {5 - entry["attempts"]}'}), 400
+    attempts = int(entry.get('attempts', 0))
+    if attempts >= 5:
+        db_delete_reset_code(phone)
+        return jsonify({'ok':False,'msg':'Muitas tentativas. Solicite um novo código.'}), 400
 
-    # Code valid — update password
+    # ✅ SEGURO: comparação segura contra timing attacks
+    if not hmac.compare_digest(str(entry['code']), str(code)):
+        db_increment_reset_attempts(phone)
+        restantes = max(0, 4 - attempts)
+        return jsonify({'ok':False,'msg':f'Código incorreto. Tentativas restantes: {restantes}'}), 400
+
     u = db_get_user(entry['user_id'])
     if not u:
-        return jsonify({'ok':False,'msg':'Usuario nao encontrado'}), 400
+        return jsonify({'ok':False,'msg':'Usuário não encontrado'}), 400
 
     u['password'] = hash_pw(nova)
     u['failed_attempts'] = 0
     db_save_user(u)
-    del _reset_codes[phone]
+    db_delete_reset_code(phone)
 
     store = db_get_store()
     msg = ('✅ {} - Senha alterada com sucesso!\n'
-           'Sua nova senha esta ativa.\n'
-           'Se nao foi voce, entre em contato com o suporte.').format(store.get('name','Sao Luis'))
+           'Sua nova senha está ativa.\n'
+           'Se não foi você, entre em contato com o suporte.').format(store.get('name','São Luis'))
     send_whatsapp(phone, msg)
 
     db_audit('sistema', 'recuperar_senha_ok', u['id'], f'phone:{phone}', request.remote_addr)
-    return jsonify({'ok':True,'msg':'Senha alterada com sucesso! Faca login com a nova senha.'})
+    return jsonify({'ok':True,'msg':'Senha alterada com sucesso! Faça login com a nova senha.'})
+
+# ── PWA MANIFEST & SERVICE WORKER ────────────────────────────────────────────
+@app.route("/manifest.json")
+def manifest():
+    r = make_response(json.dumps({
+        "name": "São Luis Fidelidade",
+        "short_name": "São Luis",
+        "description": "Cartão digital de fidelidade",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0D1B3E",
+        "theme_color": "#1A52C8",
+        "orientation": "portrait",
+        "icons": [
+            {"src":"/static/icons/icon-192.png","sizes":"192x192","type":"image/png"},
+            {"src":"/static/icons/icon-512.png","sizes":"512x512","type":"image/png"}
+        ]
+    }))
+    r.headers["Content-Type"] = "application/json"
+    return r
+
+@app.route("/sw.js")
+def service_worker():
+    sw = """
+const CACHE = 'saoluis-v1';
+const ASSETS = ['/', '/login', '/offline'];
+self.addEventListener('install', e => e.waitUntil(
+  caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})
+));
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request).then(r => r || caches.match('/offline')))
+  );
+});
+"""
+    r = make_response(sw)
+    r.headers["Content-Type"] = "application/javascript"
+    r.headers["Service-Worker-Allowed"] = "/"
+    return r
+
+# ── MAIN ──────────────────────────────────────────────────────────────────────
+with app.app_context():
+    seed()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

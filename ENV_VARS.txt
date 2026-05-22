@@ -1,0 +1,30 @@
+# ══════════════════════════════════════════════════
+# VARIÁVEIS DE AMBIENTE — São Luis Fidelidade
+# Configure no Render: Settings → Environment
+# ══════════════════════════════════════════════════
+
+# ── OBRIGATÓRIAS ─────────────────────────────────
+SECRET_KEY=gere_uma_chave_longa_aqui_32chars_minimo
+
+# Senha do painel do dono (troque antes de apresentar!)
+OWNER_PASSWORD=SaoLuis@2025!
+
+# PIN do terminal de autoatendimento (4 a 6 dígitos)
+TERMINAL_PIN=9876
+
+# ── BANCO DE DADOS ────────────────────────────────
+# Já configurado automaticamente pelo Render PostgreSQL
+DATABASE_URL=postgresql://...  # preenchido pelo Render
+
+# ── Z-API (WhatsApp) ──────────────────────────────
+ZAPI_INSTANCE=3F15745C95766110E4ADAAE399BC1248
+ZAPI_TOKEN=1617CE0563182422504C7D3F
+
+# ── OPCIONAL ─────────────────────────────────────
+# Não definir em produção (deixa o HTTPS obrigatório)
+# FLASK_DEBUG=1  ← só para desenvolvimento local
+
+# ══════════════════════════════════════════════════
+# COMO GERAR SECRET_KEY:
+# python -c "import secrets; print(secrets.token_hex(32))"
+# ══════════════════════════════════════════════════
