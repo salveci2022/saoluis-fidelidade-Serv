@@ -75,9 +75,9 @@ body{
   animation:fadeDown .8s ease both;
 }
 .logo-icon{
-  width:120px;height:120px;
+  width:200px;height:80px;
   background:#0D1B3E;
-  border-radius:28px;
+  border-radius:20px;
   border:3px solid rgba(220,30,40,.4);
   display:flex;align-items:center;justify-content:center;
   margin:0 auto 20px;
@@ -102,10 +102,13 @@ body{
 }
 .logo-name{
   font-family:'Russo One',sans-serif;
-  font-size:32px;color:#1A52C8;
+  font-size:28px;color:white;
   letter-spacing:3px;
   margin-bottom:6px;
+  display:flex;align-items:baseline;gap:0px;justify-content:center;
 }
+.logo-name .s-red{color:#DC1E28;font-size:36px;}
+.logo-name .ao-blue{color:#1A52C8;}
 .logo-tag{
   font-size:14px;color:rgba(255,255,255,.4);
   font-style:italic;
@@ -228,9 +231,10 @@ body{
   <!-- LOGO -->
   <div class="logo-wrap">
     <div class="logo-icon">
-      <span class="logo-s">S</span>
+      <div style="font-family:'Russo One',sans-serif;white-space:nowrap;display:flex;align-items:baseline;line-height:1;padding:0 6px;">
+        <span style="color:#DC1E28;font-size:52px;">S</span><span style="color:#1A52C8;font-size:28px;letter-spacing:2px;">ÃO LUIS</span>
+      </div>
     </div>
-    <div class="logo-name">ÃO LUIS</div>
     <div class="logo-tag">A sua escolha Feliz!</div>
   </div>
 
@@ -260,7 +264,7 @@ body{
   <div class="features">
     <div class="feat">
       <div class="feat-icon">💳</div>
-      <div class="feat-txt">Cartão digital</div>
+      <div class="feat-txt">Cartão digital</div> 
     </div>
     <div class="feat">
       <div class="feat-icon">⭐</div>
