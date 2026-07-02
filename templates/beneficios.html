@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#1A52C8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="São Luis">
+<title>Benefícios • São Luis Fidelidade</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" href="/static/icons/favicon.ico">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --blue:#1A52C8;--red:#DC1E28;--dark:#0D1B3E;
+  --gold:#F5A623;--green:#00C48C;--bg:#F0F4FF;
+  --white:#fff;--gray:#9CA3AF;--light:#F3F4F6;
+}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh;}
+a{text-decoration:none;}
+.top-stripe{height:5px;background:linear-gradient(90deg,var(--red),var(--blue));}
+
+header{max-width:1100px;margin:0 auto;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;}
+.brand-name{font-family:'Russo One',sans-serif;font-size:20px;white-space:nowrap;display:flex;align-items:baseline;}
+.brand-name .s-red{color:var(--red);font-size:27px;}
+.brand-name .ao-blue{color:var(--blue);}
+.back{font-size:13px;font-weight:800;color:var(--dark);background:#fff;padding:9px 16px;border-radius:30px;box-shadow:0 2px 10px rgba(13,27,62,.06);}
+
+.page-head{max-width:700px;margin:0 auto;padding:20px 24px 40px;text-align:center;}
+.page-head .eyebrow{font-size:12px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.page-head h1{font-size:clamp(26px,4vw,36px);font-weight:900;margin-bottom:12px;}
+.page-head p{font-size:15px;color:#5B6472;line-height:1.6;}
+
+.grid{max-width:1100px;margin:0 auto;padding:0 24px 56px;display:grid;grid-template-columns:1fr;gap:14px;}
+@media(min-width:640px){.grid{grid-template-columns:1fr 1fr;}}
+@media(min-width:960px){.grid{grid-template-columns:1fr 1fr 1fr;}}
+.bcard{background:#fff;border-radius:18px;padding:22px;box-shadow:0 2px 14px rgba(13,27,62,.05);transition:transform .18s,box-shadow .18s;}
+.bcard:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(13,27,62,.1);}
+.bcard .bi{width:46px;height:46px;border-radius:13px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px;}
+.bcard .bt{font-size:15.5px;font-weight:900;color:var(--dark);margin-bottom:6px;}
+.bcard .bd{font-size:12.5px;color:var(--gray);line-height:1.5;}
+
+.cta-section{background:var(--white);padding:48px 24px;text-align:center;}
+.cta-section h2{font-size:22px;font-weight:900;margin-bottom:10px;}
+.cta-section p{font-size:14px;color:var(--gray);margin-bottom:24px;}
+.btn-lg-primary{padding:16px 30px;border-radius:14px;font-size:15px;font-weight:900;cursor:pointer;border:none;background:linear-gradient(90deg,var(--blue),#123f9c);color:#fff;box-shadow:0 8px 24px rgba(26,82,200,.28);}
+
+footer{background:var(--dark);color:rgba(255,255,255,.5);text-align:center;padding:28px 24px;font-size:12px;line-height:1.7;}
+footer b{color:#fff;}
+</style>
+</head>
+<body>
+
+<div class="top-stripe"></div>
+
+<header>
+  <a class="brand-name" href="/"><span class="s-red">S</span><span class="ao-blue">ÃO LUIS</span></a>
+  <a class="back" href="/">← Voltar</a>
+</header>
+
+<div class="page-head">
+  <div class="eyebrow">Programa de fidelidade</div>
+  <h1>Tudo que você ganha ao ser cliente São Luis</h1>
+  <p>Um programa completo pensado pra recompensar quem compra sempre com a gente — pontos, cashback, sorteios e muito mais, tudo direto no seu celular.</p>
+</div>
+
+<div class="grid">
+  <div class="bcard"><div class="bi">🏷️</div><div class="bt">Clube de descontos</div><div class="bd">Preços exclusivos em produtos selecionados toda semana, só pra quem é do clube.</div></div>
+  <div class="bcard"><div class="bi">💰</div><div class="bt">Cashback</div><div class="bd">Parte do valor da sua compra volta pra você em saldo, pra usar quando quiser.</div></div>
+  <div class="bcard"><div class="bi">⭐</div><div class="bt">Programa de pontos</div><div class="bd">Acumule pontos a cada compra e troque por descontos e produtos.</div></div>
+  <div class="bcard"><div class="bi">📷</div><div class="bt">Check-in por QR Code</div><div class="bd">Escaneie o QR Code na loja e ganhe pontos extras automaticamente.</div></div>
+  <div class="bcard"><div class="bi">🎉</div><div class="bt">Sorteios</div><div class="bd">Participe de sorteios digitais exclusivos pra clientes fidelidade.</div></div>
+  <div class="bcard"><div class="bi">🎫</div><div class="bt">Cupons raspáveis</div><div class="bd">Raspe a tela e descubra descontos surpresa toda vez que abrir o app.</div></div>
+  <div class="bcard"><div class="bi">🤝</div><div class="bt">Indique um amigo</div><div class="bd">Convide amigos e ganhe pontos bônus quando eles fizerem a primeira compra.</div></div>
+  <div class="bcard"><div class="bi">🛍️</div><div class="bt">Primeira compra</div><div class="bd">Cadastrou, ganhou: desconto especial de boas-vindas na primeira compra.</div></div>
+  <div class="bcard"><div class="bi">📍</div><div class="bt">Parcerias regionais</div><div class="bd">Vantagens também em lojas parceiras da sua região.</div></div>
+  <div class="bcard"><div class="bi">📝</div><div class="bt">Pesquisa de satisfação</div><div class="bd">Sua opinião vale pontos — responda pesquisas rápidas e seja recompensado.</div></div>
+</div>
+
+<div class="cta-section">
+  <h2>Pronto pra começar a economizar?</h2>
+  <p>Cadastro gratuito, leva menos de 1 minuto.</p>
+  <button class="btn-lg-primary" onclick="window.location.href='/cadastro'">Quero me cadastrar</button>
+</div>
+
+<footer>
+  <b>Supermercado São Luis</b> • (61) 3393-3233<br>
+  QR 209 - Santa Maria, Brasília-DF
+</footer>
+
+</body>
+</html>

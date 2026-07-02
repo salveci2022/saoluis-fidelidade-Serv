@@ -574,6 +574,14 @@ def cadastro_page():
 def offline():
     return render_template("offline.html")
 
+@app.route("/beneficios")
+def beneficios_page():
+    return render_template("beneficios.html")
+
+@app.route("/planos")
+def planos_page():
+    return render_template("planos.html")
+
 @app.errorhandler(404)
 def not_found(e):
     return render_template("404.html"), 404

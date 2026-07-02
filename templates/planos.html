@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#1A52C8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="São Luis">
+<title>Planos e Preços • São Luis Fidelidade</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" href="/static/icons/favicon.ico">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --blue:#1A52C8;--red:#DC1E28;--dark:#0D1B3E;
+  --gold:#F5A623;--green:#00C48C;--bg:#F0F4FF;
+  --white:#fff;--gray:#9CA3AF;--light:#F3F4F6;
+}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh;}
+a{text-decoration:none;}
+.top-stripe{height:5px;background:linear-gradient(90deg,var(--red),var(--blue));}
+
+header{max-width:1100px;margin:0 auto;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;}
+.brand-name{font-family:'Russo One',sans-serif;font-size:20px;white-space:nowrap;display:flex;align-items:baseline;}
+.brand-name .s-red{color:var(--red);font-size:27px;}
+.brand-name .ao-blue{color:var(--blue);}
+.back{font-size:13px;font-weight:800;color:var(--dark);background:#fff;padding:9px 16px;border-radius:30px;box-shadow:0 2px 10px rgba(13,27,62,.06);}
+
+.page-head{max-width:700px;margin:0 auto;padding:20px 24px 36px;text-align:center;}
+.page-head .eyebrow{font-size:12px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.page-head h1{font-size:clamp(26px,4vw,36px);font-weight:900;margin-bottom:12px;}
+.page-head p{font-size:14px;color:#5B6472;line-height:1.6;}
+
+.plans-wrap{max-width:980px;margin:0 auto;padding:0 24px 24px;display:grid;grid-template-columns:1fr;gap:20px;align-items:start;}
+@media(min-width:860px){.plans-wrap{grid-template-columns:1.3fr .7fr;}}
+
+/* MAIN PLAN CARD */
+.main-plan{background:#fff;border-radius:24px;padding:30px 28px;box-shadow:0 10px 40px rgba(13,27,62,.08);position:relative;overflow:hidden;}
+.main-plan::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,var(--red),var(--blue));}
+.plan-ribbon{position:absolute;top:18px;right:-34px;background:var(--gold);color:var(--dark);font-size:11px;font-weight:900;padding:6px 40px;transform:rotate(40deg);box-shadow:0 2px 10px rgba(0,0,0,.15);}
+.plan-name{font-size:22px;font-weight:900;margin-bottom:14px;}
+.plan-price{display:flex;align-items:baseline;gap:6px;margin-bottom:4px;}
+.plan-price .amt{font-size:36px;font-weight:900;color:var(--blue);}
+.plan-price .per{font-size:13px;color:var(--gray);font-weight:700;}
+.plan-impl{font-size:12.5px;color:var(--gray);margin-bottom:22px;line-height:1.6;}
+.plan-impl b{color:var(--dark);}
+.plan-features{list-style:none;display:grid;grid-template-columns:1fr;gap:11px;margin-bottom:26px;}
+@media(min-width:560px){.plan-features{grid-template-columns:1fr 1fr;}}
+.plan-features li{display:flex;align-items:flex-start;gap:8px;font-size:13px;font-weight:700;color:#374151;}
+.plan-features li::before{content:'✓';color:var(--green);font-weight:900;font-size:14px;flex-shrink:0;}
+.btn-lg-primary{width:100%;padding:17px;border-radius:14px;font-size:15px;font-weight:900;cursor:pointer;border:none;background:linear-gradient(90deg,var(--blue),#123f9c);color:#fff;box-shadow:0 8px 24px rgba(26,82,200,.28);}
+
+/* SIDE OPTIONAL CARDS */
+.side{display:flex;flex-direction:column;gap:16px;}
+.opt-card{background:#fff;border-radius:18px;padding:20px;box-shadow:0 2px 14px rgba(13,27,62,.05);}
+.opt-tag{display:inline-block;font-size:10.5px;font-weight:900;color:var(--gray);background:var(--light);padding:3px 10px;border-radius:20px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;}
+.opt-name{font-size:16px;font-weight:900;display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.opt-price{font-size:19px;font-weight:900;color:var(--blue);margin-bottom:6px;}
+.opt-price span{font-size:12px;color:var(--gray);font-weight:700;}
+.opt-desc{font-size:12px;color:var(--gray);line-height:1.5;}
+
+.note{max-width:980px;margin:0 auto;padding:0 24px 48px;text-align:center;font-size:12px;color:var(--gray);}
+
+.faq-section{background:#fff;padding:48px 24px;}
+.faq-inner{max-width:700px;margin:0 auto;}
+.faq-title{text-align:center;font-size:20px;font-weight:900;margin-bottom:24px;}
+.faq-item{border-bottom:1px solid var(--light);padding:16px 0;}
+.faq-q{font-size:14px;font-weight:800;margin-bottom:6px;}
+.faq-a{font-size:13px;color:var(--gray);line-height:1.6;}
+
+footer{background:var(--dark);color:rgba(255,255,255,.5);text-align:center;padding:28px 24px;font-size:12px;line-height:1.7;}
+footer b{color:#fff;}
+</style>
+</head>
+<body>
+
+<div class="top-stripe"></div>
+
+<header>
+  <a class="brand-name" href="/"><span class="s-red">S</span><span class="ao-blue">ÃO LUIS</span></a>
+  <a class="back" href="/">← Voltar</a>
+</header>
+
+<div class="page-head">
+  <div class="eyebrow">Planos e preços</div>
+  <h1>Encante seu cliente</h1>
+  <p>Verifique junto ao seu software de PDV se há cobrança extra para implantação.</p>
+</div>
+
+<div class="plans-wrap">
+  <div class="main-plan">
+    <div class="plan-ribbon">Mais completo</div>
+    <div class="plan-name">Encante seu cliente</div>
+    <div class="plan-price"><span class="amt">R$ 1.190,00</span><span class="per">/mês por loja</span></div>
+    <div class="plan-impl">
+      <b>Implantação:</b> R$ 1.200,00 primeira loja + R$ 300,00 por loja adicional
+    </div>
+    <ul class="plan-features">
+      <li>App + Site</li>
+      <li>Check-in por QR Code</li>
+      <li>Cashback recorrente e produtos</li>
+      <li>Programa de Pontos</li>
+      <li>Sorteio instantâneo e digital</li>
+      <li>Clube de descontos</li>
+      <li>Relatórios e estatísticas</li>
+      <li>Notificação Push e SMS</li>
+      <li>Geolocalização</li>
+      <li>Filtros e campanhas (CRM)</li>
+      <li>Combos promocionais</li>
+      <li>Cupons de desconto</li>
+      <li>Marketplace de parceiros</li>
+      <li>Carrosséis personalizáveis</li>
+      <li>Campanha por QR Code</li>
+      <li>Indique um amigo</li>
+      <li>Pesquisa de satisfação</li>
+      <li>Top inativos</li>
+      <li>Cupons raspáveis (ilimitado)</li>
+    </ul>
+    <button class="btn-lg-primary" onclick="window.location.href='/cadastro'">Falar com a equipe</button>
+  </div>
+
+  <div class="side">
+    <div class="opt-card">
+      <span class="opt-tag">Opcional</span>
+      <div class="opt-name">💬 WhatsApp</div>
+      <div class="opt-price">R$ 650,00<span>/mês</span></div>
+      <div class="opt-desc">Atendimento e campanhas para até 10 mil contatos/dia.</div>
+    </div>
+    <div class="opt-card">
+      <span class="opt-tag">Opcional</span>
+      <div class="opt-name">🛒 E-commerce</div>
+      <div class="opt-price">R$ 359,00<span>/mês por loja</span></div>
+      <div class="opt-desc">+ R$ 4,00 por pedido. Implantação a partir de R$ 1.200,00 por loja — leva em média 120 dias.</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">Valores sujeitos a confirmação conforme número de lojas e escopo do projeto.</div>
+
+<div class="faq-section">
+  <div class="faq-inner">
+    <div class="faq-title">Perguntas frequentes</div>
+    <div class="faq-item">
+      <div class="faq-q">O cliente final precisa pagar alguma coisa?</div>
+      <div class="faq-a">Não. O cadastro e uso do cartão de fidelidade é 100% gratuito para o cliente final.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Preciso trocar meu sistema de caixa (PDV)?</div>
+      <div class="faq-a">Não necessariamente — verifique com seu fornecedor de PDV se há cobrança extra para a integração de implantação.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Quanto tempo leva pra começar a usar?</div>
+      <div class="faq-a">A implantação padrão (App + Site) costuma ser rápida. O módulo de E-commerce opcional leva em média 120 dias.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <b>Supermercado São Luis</b> • (61) 3393-3233<br>
+  QR 209 - Santa Maria, Brasília-DF
+</footer>
+
+</body>
+</html>
