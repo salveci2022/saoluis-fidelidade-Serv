@@ -448,6 +448,9 @@ def send_whatsapp(phone, message):
         return True
     import requests as req
     clean = re.sub(r'\D', '', phone)
+    # ✅ Garante código do país (55) — números salvos no banco costumam ter só DDD+numero (10-11 digitos)
+    if len(clean) in (10, 11):
+        clean = "55" + clean
     headers = {"Content-Type": "application/json"}
     if CLIENT_TOKEN:
         headers["Client-Token"] = CLIENT_TOKEN

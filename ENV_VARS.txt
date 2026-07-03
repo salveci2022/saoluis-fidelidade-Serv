@@ -28,3 +28,5 @@ ZAPI_TOKEN=1617CE0563182422504C7D3F
 # COMO GERAR SECRET_KEY:
 # python -c "import secrets; print(secrets.token_hex(32))"
 # ══════════════════════════════════════════════════
+ZAPI_CLIENT_TOKEN=F5836369a4d384b28bfb6f0831a200b1fS
+ZAPI_CLIENT_TOKEN=F5836369a4d384b28bfb6f0831a200b1fS
