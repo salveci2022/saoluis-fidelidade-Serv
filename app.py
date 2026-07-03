@@ -442,15 +442,21 @@ def get_discount(pts, active_promo=None):
 def send_whatsapp(phone, message):
     INST = os.environ.get("ZAPI_INSTANCE","")
     TOKEN= os.environ.get("ZAPI_TOKEN","")
+    CLIENT_TOKEN = os.environ.get("ZAPI_CLIENT_TOKEN","")
     if not INST or not TOKEN:
         log.info(f"[WhatsApp simulado] {phone}: {message[:60]}")
         return True
     import requests as req
     clean = re.sub(r'\D', '', phone)
+    headers = {"Content-Type": "application/json"}
+    if CLIENT_TOKEN:
+        headers["Client-Token"] = CLIENT_TOKEN
     try:
         r = req.post(
             f"https://api.z-api.io/instances/{INST}/token/{TOKEN}/send-text",
-            json={"phone": clean, "message": message}, timeout=8)
+            json={"phone": clean, "message": message}, headers=headers, timeout=8)
+        if r.status_code != 200:
+            log.error(f"WhatsApp falhou ({r.status_code}) para {clean}: {r.text[:200]}")
         return r.status_code == 200
     except Exception as e:
         log.error(f"WhatsApp error: {e}")
