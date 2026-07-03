@@ -1183,6 +1183,11 @@ def api_recuperar_verificar():
         restantes = max(0, 4 - attempts)
         return jsonify({'ok':False,'msg':f'Código incorreto. Tentativas restantes: {restantes}'}), 400
 
+    # ✅ CORREÇÃO: '__CHECK__' é só uma verificação do código (passo 2 da tela),
+    # não deve salvar senha nem apagar o código — isso só acontece no passo 3 (senha real)
+    if nova == '__CHECK__':
+        return jsonify({'ok':True,'msg':'Código válido.'})
+
     u = db_get_user(entry['user_id'])
     if not u:
         return jsonify({'ok':False,'msg':'Usuário não encontrado'}), 400
