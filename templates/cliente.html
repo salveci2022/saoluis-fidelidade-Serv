@@ -24,9 +24,17 @@
 .qr-inner{width:118px;height:118px;background:white;border-radius:6px;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px;}
 .qc{border-radius:1px;}
 .pw-section{border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px;}
+.sl-topbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.sl-back{background:#fff;border:none;border-radius:30px;padding:8px 16px;font-size:13px;font-weight:800;color:#0D1B3E;box-shadow:0 2px 10px rgba(13,27,62,.08);cursor:pointer;}
+.sl-back:active{transform:scale(.96);}
+.sl-topbar-title{font-size:15px;font-weight:900;color:#0D1B3E;}
 </style>
 {% endblock %}
 {% block content %}
+<div class="sl-topbar">
+  <button class="sl-back" onclick="window.location.href='/'">← Voltar</button>
+  <span class="sl-topbar-title">Meu Cartão</span>
+</div>
 <div id="install-banner" class="install-banner" style="display:none;" onclick="installPWA()">
   <div class="ib-icon">📲</div>
   <div class="ib-text">
